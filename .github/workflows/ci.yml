@@ -1,0 +1,151 @@
+name: 'Pleyades App DevSecOps Pipeline'
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # =========================================================
+  # 1. Detección de Fuga de Secretos (Gitleaks)
+  # =========================================================
+  secret-scan:
+    name: '1. Secret Leak Detection (Gitleaks)'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código con historial completo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Instalar y ejecutar Gitleaks
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download v8.24.0 --repo gitleaks/gitleaks --pattern 'gitleaks_8.24.0_linux_x64.tar.gz'
+          tar -xzf gitleaks_8.24.0_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+          gitleaks detect --source=. --verbose --redact
+
+  # =========================================================
+  # 2. Calidad de Código, Buenas Prácticas y SAST (golangci-lint + gosec)
+  # =========================================================
+  lint-and-quality:
+    name: '2. Code Quality & SAST (golangci-lint)'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Configurar entorno de Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Ejecutar golangci-lint
+        uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          args: --config=.golangci.yml
+
+  # =========================================================
+  # 3. Pruebas Unitarias y Cobertura de Código
+  # =========================================================
+  unit-tests:
+    name: '3. Unit Tests & Code Coverage'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Configurar entorno de Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Ejecutar Pruebas y Generar Perfil de Cobertura
+        run: |
+          go test -v -coverprofile=coverage.out ./...
+
+      - name: Mostrar reporte de cobertura en consola
+        run: |
+          go tool cover -func=coverage.out
+
+      - name: Subir reporte de cobertura como artefacto
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: code-coverage-report
+          path: coverage.out
+          if-no-files-found: warn
+          retention-days: 14
+
+  # =========================================================
+  # 4. Análisis de Vulnerabilidades en Dependencias (SCA)
+  # =========================================================
+  dependency-scan:
+    name: '4. Dependency Vulnerability Scan (govulncheck & Trivy)'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Configurar entorno de Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Ejecutar Govulncheck (Escáner Oficial de Go)
+        uses: golang/govulncheck-action@v1.1.0
+        with:
+          go-version-file: 'go.mod'
+          package-path: './...'
+
+      - name: Escanear Sistema de Archivos y Dependencias con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+          output: 'trivy-fs-report.txt'
+
+      - name: Mostrar reporte de Trivy en consola
+        run: |
+          cat trivy-fs-report.txt
+
+      - name: Subir reporte de dependencias de Trivy
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trivy-fs-report
+          path: trivy-fs-report.txt
+          if-no-files-found: warn
+          retention-days: 14

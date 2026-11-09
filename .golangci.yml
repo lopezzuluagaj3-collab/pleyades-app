@@ -1,0 +1,28 @@
+# =========================================================
+# Proyecto Pléyades - Configuración de Calidad y Linting (golangci-lint)
+# =========================================================
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck     # Previene llamadas a funciones donde se ignora el error retornado
+    - gosimple     # Sugiere simplificaciones idiomáticas de código Go
+    - govet        # Analizador oficial de construcciones sospechosas
+    - ineffassign  # Detecta asignaciones a variables que nunca se leen
+    - staticcheck  # Conjunto exhaustivo de reglas estáticas de la comunidad Go
+    - unused       # Identifica constantes, variables, funciones y structs no utilizados
+    - gosec        # SAST: Analiza el AST de Go buscando vulnerabilidades de seguridad
+
+linters-settings:
+  govet:
+    enable-all: true
+  gosec:
+    severity: medium
+    confidence: medium
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0

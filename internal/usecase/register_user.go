@@ -13,8 +13,6 @@ type RegisterUserInput struct {
 	Email    string
 	Password string
 	Name     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
 }
 
 type RegisterUserUseCase struct {
@@ -26,7 +24,6 @@ func NewRegisterUserUseCase(userRepo ports.UserRepository) *RegisterUserUseCase 
 		userRepo: userRepo,
 	}
 }
-
 
 func (uc *RegisterUserUseCase) Execute(ctx context.Context, input RegisterUserInput) (*domain.User, error) {
 

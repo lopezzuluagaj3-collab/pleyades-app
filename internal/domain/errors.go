@@ -3,13 +3,11 @@ package domain
 import "errors"
 
 var (
-	ErrEmptyEmail = errors.New("El Email no puede estar vacio")
-	ErrArroaEmail = errors.New("El Email debe tener '@'")
-
-	ErrName = errors.New("El nombre solo puede tener letras")
-	ErrEmptyName = errors.New("El nombre no puede estar vacio")
-	ErrLongName = errors.New("El nombre no puede ser mayor que 50 caracteres")
-
-	ErrEmptyPass = errors.New("La contraseña no puede estar vacia")
-	ErrValidatePass = errors.New("La contrasela ingresada debe tener un caracter especial, numeros y una mayuscula")
+	ErrEmptyEmail   = errors.New("el correo electrónico no puede estar vacío")
+	ErrArroaEmail   = errors.New("el correo electrónico debe tener '@'")
+	ErrName         = errors.New("el nombre solo puede contener letras")
+	ErrEmptyName    = errors.New("el nombre no puede estar vacío")
+	ErrLongName     = errors.New("el nombre no puede ser mayor a 50 caracteres")
+	ErrEmptyPass    = errors.New("la contraseña no puede estar vacía")
+	ErrValidatePass = errors.New("la contraseña ingresada debe contener un carácter especial, números y una mayúscula")
 )

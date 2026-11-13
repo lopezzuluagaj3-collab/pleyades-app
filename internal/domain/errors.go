@@ -10,5 +10,6 @@ var (
 	ErrEmptyName          = errors.New("el nombre no puede estar vacío")
 	ErrLongName           = errors.New("el nombre no puede ser mayor a 50 caracteres")
 	ErrEmptyPass          = errors.New("la contraseña no puede estar vacía")
+	ErrUserNotFound       = errors.New("el usuario no fue encontrado")
 	ErrValidatePass       = errors.New("la contraseña ingresada debe contener un carácter especial, números y una mayúscula")
 )

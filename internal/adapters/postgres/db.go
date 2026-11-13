@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"time"
 )
 
 type DBConfig struct {
@@ -34,10 +34,10 @@ func NewConnection(cfg DBConfig) (*sql.DB, error) {
 	}
 
 	// Configuración del Pool de conexiones optimizado para Kubernetes
-	db.SetMaxOpenConns(25)                 
-	db.SetMaxIdleConns(25)                 
-	db.SetConnMaxLifetime(5 * time.Minute) 
-	db.SetConnMaxIdleTime(5 * time.Minute) 
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	// Verificación de conectividad inmediata con timeout defensivo
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

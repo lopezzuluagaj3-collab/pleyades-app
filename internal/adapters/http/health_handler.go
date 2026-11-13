@@ -9,7 +9,9 @@ func LivenessHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 
-	w.Write([]byte(`{"status":"up"}`))
+	if _, err := w.Write([]byte(`{"status":"up"}`)); err != nil {
+		return
+	}
 }
 
 func ReadinessHandler(w http.ResponseWriter, r *http.Request) {
@@ -17,5 +19,7 @@ func ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 
-	w.Write([]byte(`{"status":"up"}`))
+	if _, err := w.Write([]byte(`{"status":"up"}`)); err != nil {
+		return
+	}
 }

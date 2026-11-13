@@ -65,11 +65,11 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*domain
 	return &u, nil
 }
 
-func (r *UserRepository) Delete(ctx context.Context, email string) error{
+func (r *UserRepository) Delete(ctx context.Context, email string) error {
 	query := `
 	DELETE FROM users where email = $1;
 	`
-	if _, err := r.db.ExecContext(ctx, query, email); err != nil{
+	if _, err := r.db.ExecContext(ctx, query, email); err != nil {
 		return fmt.Errorf("postgres: error al eliminar usuario: %w", err)
 	}
 	return nil

@@ -29,13 +29,15 @@ func getRequiredEnv(key string) (string, error) {
 }
 
 // loadEnvFile lee el archivo .env si existe en local y carga sus variables en el sistema
-func loadEnvFile(path string) {
-	file, err := os.Open(path)
+func loadEnvFile() {
+	file, err := os.Open(".env")
 	if err != nil {
 		// En Kubernetes el archivo .env no existe, así que ignoramos el error
 		return
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -52,7 +54,7 @@ func loadEnvFile(path string) {
 
 // Load carga la configuración sin credenciales quemadas
 func Load() (Config, error) {
-	loadEnvFile(".env")
+	loadEnvFile()
 
 	SERVER_PORT, err := getRequiredEnv("SERVER_PORT")
 	if err != nil {

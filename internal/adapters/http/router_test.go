@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"pleyades-app/internal/adapters/http/middleware"
@@ -14,9 +15,12 @@ import (
 func TestRouterSuite(t *testing.T) {
 	reg := prometheus.NewRegistry()
 	metrics := middleware.NewMetrics(reg)
-	userHandler := NewUserHandler(&usecase.RegisterUserUseCase{})
+	rateLimiter := middleware.NewRateLimiter(100.0, 50.0, 1*time.Minute)
 
-	router := NewRouter(userHandler, metrics)
+	userHandler := NewUserHandler(&usecase.RegisterUserUseCase{})
+	authHandler := NewAuthHandler(&usecase.LoginUserUseCase{})
+
+	router := NewRouter(userHandler, authHandler, metrics, rateLimiter)
 	if router == nil {
 		t.Fatal("expected non-nil router instance")
 	}

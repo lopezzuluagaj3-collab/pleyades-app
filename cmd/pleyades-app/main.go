@@ -39,11 +39,18 @@ func main() {
 
 	// 3. Inyección de Dependencias
 	metrics := middleware.NewMetrics(prometheus.DefaultRegisterer)
+	rateLimiter := middleware.NewRateLimiter(20.0, 50.0, 10*time.Minute)
 	hasher := crypto.NewBcryptHasher(bcrypt.DefaultCost)
+	tokenService := crypto.NewJWTTokenService(cfg.JWTSecret)
+
 	userRepo := postgres.NewUserRepository(db)
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
+	loginUseCase := usecase.NewLoginUserUseCase(userRepo, hasher, tokenService, 15*time.Minute)
+
 	userHandler := httpadapter.NewUserHandler(userUseCase)
-	router := httpadapter.NewRouter(userHandler, metrics)
+	authHandler := httpadapter.NewAuthHandler(loginUseCase)
+
+	router := httpadapter.NewRouter(userHandler, authHandler, metrics, rateLimiter)
 
 	// 4. Configurar Servidor HTTP con Timeouts Cloud-Native
 	addr := fmt.Sprintf(":%s", cfg.ServerPort)

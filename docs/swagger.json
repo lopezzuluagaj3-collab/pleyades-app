@@ -1,0 +1,452 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "SaaS Cloud-Native Engine \u0026 Multi-Tenant Provisioner for Kubernetes.",
+        "title": "Pleyades Multi-Tenant Microservice API",
+        "termsOfService": "https://pleyades.io/terms",
+        "contact": {
+            "name": "Equipo de Arquitectura Pleyades",
+            "email": "arquitecto@pleyades.io"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "Autentica las credenciales del usuario y emite un JWT Bearer Token (TTL 15 min, Sliding Session)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Autenticación"
+                ],
+                "summary": "Iniciar sesión de usuario",
+                "parameters": [
+                    {
+                        "description": "Credenciales de inicio de sesión",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token JWT emitido exitosamente",
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Formato de petición json inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Credenciales inválidas",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Aprovisiona un nuevo tenant con base de datos PostgreSQL aislada y credenciales de conexión efímeras (Show-Once Pattern)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inquilinos"
+                ],
+                "summary": "Crear un nuevo inquilino (Tenant)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Clave única UUID para idempotencia en reintentos de red",
+                        "name": "Idempotency-Key",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Datos para la creación del inquilino",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.CreateTenantRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Inquilino creado exitosamente con credenciales Show-Once de base de datos",
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.TenantResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Datos de entrada inválidos o slug con formato no permitido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado: sesión JWT ausente o inválida",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "El slug solicitado ya existe en el sistema",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error interno del servidor durante el aprovisionamiento",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tenants/{id}/reset-password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Regenera la contraseña de PostgreSQL para el tenant indicado devolviendo las nuevas credenciales (Show-Once Pattern). Requiere ser propietario del tenant.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Inquilinos"
+                ],
+                "summary": "Rotar contraseña de base de datos del inquilino",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID del inquilino",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Clave única UUID para idempotencia en reintentos de red",
+                        "name": "Idempotency-Key",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Contraseña rotada exitosamente con nuevas credenciales Show-Once",
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.ResetPasswordResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "ID de inquilino requerido o inválido",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado: sesión JWT ausente o inválida",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Prohibido: el usuario autenticado no es el propietario del inquilino",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Inquilino no encontrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/users": {
+            "post": {
+                "description": "Crea una cuenta de usuario con credenciales seguras protegidas con bcrypt",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Usuarios"
+                ],
+                "summary": "Registrar un nuevo usuario",
+                "parameters": [
+                    {
+                        "description": "Datos de registro del usuario",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.RegisterUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Usuario registrado exitosamente",
+                        "schema": {
+                            "$ref": "#/definitions/httpadapter.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Datos de entrada inválidos o JSON malformado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "El correo electrónico ya se encuentra registrado",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error interno del servidor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "httpadapter.CreateTenantRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.LoginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.RegisterUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.ResetPasswordResponse": {
+            "type": "object",
+            "properties": {
+                "database": {
+                    "$ref": "#/definitions/httpadapter.TenantDatabaseResponse"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.TenantDatabaseResponse": {
+            "type": "object",
+            "properties": {
+                "connection_string": {
+                    "type": "string"
+                },
+                "host": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "user": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.TenantResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "database": {
+                    "$ref": "#/definitions/httpadapter.TenantDatabaseResponse"
+                },
+                "db_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner_user_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "httpadapter.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "uuid": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "description": "Ingrese \"Bearer \u003ctoken\u003e\" obtenido al iniciar sesión en /api/v1/auth/login",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

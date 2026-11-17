@@ -1,0 +1,302 @@
+basePath: /api/v1
+definitions:
+  httpadapter.CreateTenantRequest:
+    properties:
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  httpadapter.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  httpadapter.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      token_type:
+        type: string
+    type: object
+  httpadapter.RegisterUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  httpadapter.ResetPasswordResponse:
+    properties:
+      database:
+        $ref: '#/definitions/httpadapter.TenantDatabaseResponse'
+      slug:
+        type: string
+      tenant_id:
+        type: string
+    type: object
+  httpadapter.TenantDatabaseResponse:
+    properties:
+      connection_string:
+        type: string
+      host:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      port:
+        type: integer
+      user:
+        type: string
+    type: object
+  httpadapter.TenantResponse:
+    properties:
+      created_at:
+        type: string
+      database:
+        $ref: '#/definitions/httpadapter.TenantDatabaseResponse'
+      db_name:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      owner_user_id:
+        type: string
+      slug:
+        type: string
+      status:
+        type: string
+    type: object
+  httpadapter.UserResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      name:
+        type: string
+      uuid:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: arquitecto@pleyades.io
+    name: Equipo de Arquitectura Pleyades
+  description: SaaS Cloud-Native Engine & Multi-Tenant Provisioner for Kubernetes.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: https://pleyades.io/terms
+  title: Pleyades Multi-Tenant Microservice API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Autentica las credenciales del usuario y emite un JWT Bearer Token
+        (TTL 15 min, Sliding Session)
+      parameters:
+      - description: Credenciales de inicio de sesión
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpadapter.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token JWT emitido exitosamente
+          schema:
+            $ref: '#/definitions/httpadapter.LoginResponse'
+        "400":
+          description: Formato de petición json inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Credenciales inválidas
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Iniciar sesión de usuario
+      tags:
+      - Autenticación
+  /tenants:
+    post:
+      consumes:
+      - application/json
+      description: Aprovisiona un nuevo tenant con base de datos PostgreSQL aislada
+        y credenciales de conexión efímeras (Show-Once Pattern)
+      parameters:
+      - description: Clave única UUID para idempotencia en reintentos de red
+        in: header
+        name: Idempotency-Key
+        type: string
+      - description: Datos para la creación del inquilino
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpadapter.CreateTenantRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Inquilino creado exitosamente con credenciales Show-Once de
+            base de datos
+          schema:
+            $ref: '#/definitions/httpadapter.TenantResponse'
+        "400":
+          description: Datos de entrada inválidos o slug con formato no permitido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'No autorizado: sesión JWT ausente o inválida'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: El slug solicitado ya existe en el sistema
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Error interno del servidor durante el aprovisionamiento
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Crear un nuevo inquilino (Tenant)
+      tags:
+      - Inquilinos
+  /tenants/{id}/reset-password:
+    post:
+      description: Regenera la contraseña de PostgreSQL para el tenant indicado devolviendo
+        las nuevas credenciales (Show-Once Pattern). Requiere ser propietario del
+        tenant.
+      parameters:
+      - description: ID del inquilino
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Clave única UUID para idempotencia en reintentos de red
+        in: header
+        name: Idempotency-Key
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Contraseña rotada exitosamente con nuevas credenciales Show-Once
+          schema:
+            $ref: '#/definitions/httpadapter.ResetPasswordResponse'
+        "400":
+          description: ID de inquilino requerido o inválido
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: 'No autorizado: sesión JWT ausente o inválida'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: 'Prohibido: el usuario autenticado no es el propietario del
+            inquilino'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Inquilino no encontrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Rotar contraseña de base de datos del inquilino
+      tags:
+      - Inquilinos
+  /users:
+    post:
+      consumes:
+      - application/json
+      description: Crea una cuenta de usuario con credenciales seguras protegidas
+        con bcrypt
+      parameters:
+      - description: Datos de registro del usuario
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpadapter.RegisterUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Usuario registrado exitosamente
+          schema:
+            $ref: '#/definitions/httpadapter.UserResponse'
+        "400":
+          description: Datos de entrada inválidos o JSON malformado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: El correo electrónico ya se encuentra registrado
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Error interno del servidor
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Registrar un nuevo usuario
+      tags:
+      - Usuarios
+securityDefinitions:
+  BearerAuth:
+    description: Ingrese "Bearer <token>" obtenido al iniciar sesión en /api/v1/auth/login
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

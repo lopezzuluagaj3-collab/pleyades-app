@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/crypto/bcrypt"
 	"pleyades-app/internal/adapters/crypto"
 	"pleyades-app/internal/adapters/http"
@@ -36,11 +37,12 @@ func main() {
 	}()
 
 	// 3. Inyección de Dependencias
+	metrics := httpadapter.NewMetrics(prometheus.DefaultRegisterer)
 	hasher := crypto.NewBcryptHasher(bcrypt.DefaultCost)
 	userRepo := postgres.NewUserRepository(db)
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
 	userHandler := httpadapter.NewUserHandler(userUseCase)
-	router := httpadapter.NewRouter(userHandler)
+	router := httpadapter.NewRouter(userHandler, metrics)
 
 	// 4. Configurar Servidor HTTP con Timeouts Cloud-Native
 	addr := fmt.Sprintf(":%s", cfg.ServerPort)

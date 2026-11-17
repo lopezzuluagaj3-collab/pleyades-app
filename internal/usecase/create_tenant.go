@@ -35,11 +35,11 @@ type CreateTenantOutput struct {
 // CreateTenantUseCase orquesta la validación, aprovisionamiento físico y persistencia de un nuevo tenant
 type CreateTenantUseCase struct {
 	tenantRepo  ports.TenantRepository
-	provisioner ports.TenantProvisioner
+	provisioner ports.TenantDatabaseCreator
 }
 
 // NewCreateTenantUseCase inicializa el caso de uso inyectando sus dependencias (DIP)
-func NewCreateTenantUseCase(tenantRepo ports.TenantRepository, provisioner ports.TenantProvisioner) *CreateTenantUseCase {
+func NewCreateTenantUseCase(tenantRepo ports.TenantRepository, provisioner ports.TenantDatabaseCreator) *CreateTenantUseCase {
 	return &CreateTenantUseCase{
 		tenantRepo:  tenantRepo,
 		provisioner: provisioner,

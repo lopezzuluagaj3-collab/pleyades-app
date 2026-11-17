@@ -98,14 +98,6 @@ func (m *mockTenantProvisioner) Provision(ctx context.Context, slug string) (*po
 	return m.mockCredentials, nil
 }
 
-func (m *mockTenantProvisioner) ResetPassword(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
-	m.provisionCalls = append(m.provisionCalls, slug)
-	if m.provisionErr != nil {
-		return nil, m.provisionErr
-	}
-	return m.mockCredentials, nil
-}
-
 func TestCreateTenantUseCaseSuite(t *testing.T) {
 	t.Run("Happy Path Tenant Creation", testCreateTenantHappyPath)
 	t.Run("Domain Validation Short-Circuits Before Infrastructure", testCreateTenantDomainValidation)

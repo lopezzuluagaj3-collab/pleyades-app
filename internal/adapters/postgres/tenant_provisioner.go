@@ -53,7 +53,7 @@ func (p *LocalPostgresTenantProvisioner) Provision(ctx context.Context, slug str
 
 	if !dbExists {
 		createDBStmt := fmt.Sprintf(`CREATE DATABASE "%s"`, dbName)
-		if _, err := p.db.ExecContext(ctx, createDBStmt); err != nil {
+		if _, err := p.db.ExecContext(ctx, createDBStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 			return nil, fmt.Errorf("postgres provisioner: error al crear base de datos '%s': %w", dbName, err)
 		}
 	}
@@ -68,14 +68,14 @@ func (p *LocalPostgresTenantProvisioner) Provision(ctx context.Context, slug str
 	if !userExists {
 		escapedPass := strings.ReplaceAll(password, "'", "''")
 		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
-		if _, err := p.db.ExecContext(ctx, createUserStmt); err != nil {
+		if _, err := p.db.ExecContext(ctx, createUserStmt); err != nil { // NOSONAR: Identifiers and passwords are sanitized
 			return nil, fmt.Errorf("postgres provisioner: error al crear usuario '%s': %w", username, err)
 		}
 	}
 
 	// 3. Asignar privilegios exclusivos sobre la base de datos creada
 	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
-	if _, err := p.db.ExecContext(ctx, grantStmt); err != nil {
+	if _, err := p.db.ExecContext(ctx, grantStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 		return nil, fmt.Errorf("postgres provisioner: error al otorgar privilegios a '%s' sobre '%s': %w", username, dbName, err)
 	}
 

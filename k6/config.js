@@ -39,7 +39,7 @@ export const stressProfile = {
 // Carga continua moderada durante períodos prolongados para detectar fugas de memoria (memory leaks),
 // retención de conexiones en el pool de PostgreSQL y acumulación de basura en el Garbage Collector (GC).
 const soakDuration = __ENV.SOAK_DURATION || '30m';
-const soakVUs = parseInt(__ENV.SOAK_VUS || '20', 10);
+const soakVUs = Number.parseInt(__ENV.SOAK_VUS || '20', 10);
 
 export const soakProfile = {
   stages: [

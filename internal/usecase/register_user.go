@@ -17,11 +17,13 @@ type RegisterUserInput struct {
 
 type RegisterUserUseCase struct {
 	userRepo ports.UserRepository
+	hasher   ports.PasswordHasher
 }
 
-func NewRegisterUserUseCase(userRepo ports.UserRepository) *RegisterUserUseCase {
+func NewRegisterUserUseCase(userRepo ports.UserRepository, hasher ports.PasswordHasher) *RegisterUserUseCase {
 	return &RegisterUserUseCase{
 		userRepo: userRepo,
+		hasher:   hasher,
 	}
 }
 
@@ -44,6 +46,12 @@ func (uc *RegisterUserUseCase) Execute(ctx context.Context, input RegisterUserIn
 	if existingUser != nil {
 		return nil, domain.ErrEmailAlreadyExists
 	}
+
+	hashedPassword, err := uc.hasher.Hash(user.Password)
+	if err != nil {
+		return nil, err
+	}
+	user.Password = hashedPassword
 
 	if err := uc.userRepo.Save(ctx, user); err != nil {
 		return nil, err

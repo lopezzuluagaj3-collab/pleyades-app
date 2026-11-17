@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+	"pleyades-app/internal/adapters/crypto"
 	"pleyades-app/internal/adapters/http"
 	"pleyades-app/internal/adapters/postgres"
 	"pleyades-app/internal/config"
@@ -29,8 +31,9 @@ func main() {
 	}()
 
 	// 3. Inyección de Dependencias
+	hasher := crypto.NewBcryptHasher(bcrypt.DefaultCost)
 	userRepo := postgres.NewUserRepository(db)
-	userUseCase := usecase.NewRegisterUserUseCase(userRepo)
+	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
 	userHandler := httpadapter.NewUserHandler(userUseCase)
 	router := httpadapter.NewRouter(userHandler)
 

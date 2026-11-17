@@ -55,7 +55,18 @@ func NewUserHandler(uc *usecase.RegisterUserUseCase) *UserHandler {
 	}
 }
 
-// Register es el orquestador puro (Cumple SRP)
+// Register godoc
+// @Summary Registrar un nuevo usuario
+// @Description Crea una cuenta de usuario con credenciales seguras protegidas con bcrypt
+// @Tags Usuarios
+// @Accept json
+// @Produce json
+// @Param request body RegisterUserRequest true "Datos de registro del usuario"
+// @Success 201 {object} UserResponse "Usuario registrado exitosamente"
+// @Failure 400 {object} map[string]string "Datos de entrada inválidos o JSON malformado"
+// @Failure 409 {object} map[string]string "El correo electrónico ya se encuentra registrado"
+// @Failure 500 {object} map[string]string "Error interno del servidor"
+// @Router /users [post]
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

@@ -31,7 +31,18 @@ func NewAuthHandler(uc *usecase.LoginUserUseCase) *AuthHandler {
 	}
 }
 
-// Login es el orquestador HTTP para la autenticación de usuarios (Cumple SRP)
+// Login godoc
+// @Summary Iniciar sesión de usuario
+// @Description Autentica las credenciales del usuario y emite un JWT Bearer Token (TTL 15 min, Sliding Session)
+// @Tags Autenticación
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Credenciales de inicio de sesión"
+// @Success 200 {object} LoginResponse "Token JWT emitido exitosamente"
+// @Failure 400 {object} map[string]string "Formato de petición json inválido"
+// @Failure 401 {object} map[string]string "Credenciales inválidas"
+// @Failure 500 {object} map[string]string "Error interno del servidor"
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

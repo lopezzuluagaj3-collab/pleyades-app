@@ -64,7 +64,21 @@ func NewTenantHandler(
 	}
 }
 
-// Create maneja la petición POST /api/v1/tenants (Ruta protegida por JWT e Idempotency)
+// Create godoc
+// @Summary Crear un nuevo inquilino (Tenant)
+// @Description Aprovisiona un nuevo tenant con base de datos PostgreSQL aislada y credenciales de conexión efímeras (Show-Once Pattern)
+// @Tags Inquilinos
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param Idempotency-Key header string false "Clave única UUID para idempotencia en reintentos de red"
+// @Param request body CreateTenantRequest true "Datos para la creación del inquilino"
+// @Success 201 {object} TenantResponse "Inquilino creado exitosamente con credenciales Show-Once de base de datos"
+// @Failure 400 {object} map[string]string "Datos de entrada inválidos o slug con formato no permitido"
+// @Failure 401 {object} map[string]string "No autorizado: sesión JWT ausente o inválida"
+// @Failure 409 {object} map[string]string "El slug solicitado ya existe en el sistema"
+// @Failure 500 {object} map[string]string "Error interno del servidor durante el aprovisionamiento"
+// @Router /tenants [post]
 func (h *TenantHandler) Create(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.UserFromContext(r.Context())
 	if !ok || claims == nil || claims.UUID == "" {
@@ -101,7 +115,21 @@ func (h *TenantHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ResetPassword maneja la petición POST /api/v1/tenants/{id}/reset-password
+// ResetPassword godoc
+// @Summary Rotar contraseña de base de datos del inquilino
+// @Description Regenera la contraseña de PostgreSQL para el tenant indicado devolviendo las nuevas credenciales (Show-Once Pattern). Requiere ser propietario del tenant.
+// @Tags Inquilinos
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "ID del inquilino"
+// @Param Idempotency-Key header string false "Clave única UUID para idempotencia en reintentos de red"
+// @Success 200 {object} ResetPasswordResponse "Contraseña rotada exitosamente con nuevas credenciales Show-Once"
+// @Failure 400 {object} map[string]string "ID de inquilino requerido o inválido"
+// @Failure 401 {object} map[string]string "No autorizado: sesión JWT ausente o inválida"
+// @Failure 403 {object} map[string]string "Prohibido: el usuario autenticado no es el propietario del inquilino"
+// @Failure 404 {object} map[string]string "Inquilino no encontrado"
+// @Failure 500 {object} map[string]string "Error interno del servidor"
+// @Router /tenants/{id}/reset-password [post]
 func (h *TenantHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	claims, ok := middleware.UserFromContext(r.Context())
 	if !ok || claims == nil || claims.UUID == "" {

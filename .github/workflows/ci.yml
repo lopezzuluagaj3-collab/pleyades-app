@@ -155,10 +155,10 @@ jobs:
           retention-days: 14
 
   # =========================================================
-  # 5. Verificación de Compilación de Imagen Docker (Multi-Stage Distroless)
+  # 5. Verificación de Compilación de Imagen Docker y Escaneo de Seguridad (Trivy)
   # =========================================================
   docker-build:
-    name: '5. Docker Container Build Verification'
+    name: '5. Docker Build & Container Security (Trivy)'
     runs-on: ubuntu-latest
 
     steps:
@@ -169,3 +169,99 @@ jobs:
         run: |
           docker build -t pleyades-app:ci .
           docker images pleyades-app:ci
+
+      - name: Escanear imagen de contenedor con Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'pleyades-app:ci'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+          output: 'trivy-image-report.txt'
+
+      - name: Mostrar reporte de Trivy en consola
+        run: |
+          cat trivy-image-report.txt
+
+      - name: Subir reporte de seguridad de imagen como artefacto
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trivy-container-image-report
+          path: trivy-image-report.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  # =========================================================
+  # 6. Seguridad Dinámica DAST (OWASP ZAP API Scan)
+  # =========================================================
+  dast-security:
+    name: '6. Dynamic Application Security Testing (OWASP ZAP)'
+    runs-on: ubuntu-latest
+    needs: [unit-tests, docker-build]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pleyades
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: pleyades_main
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Configurar entorno de Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Iniciar microservicio efímero en segundo plano
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: '5432'
+          DB_USER: pleyades
+          DB_PASSWORD: secret
+          DB_NAME: pleyades_main
+          DB_SSLMODE: disable
+          SERVER_PORT: '8080'
+          JWT_SECRET: devsecops-super-secret-key-32-chars-long
+        run: |
+          go build -o /tmp/pleyades-api ./cmd/pleyades-app
+          /tmp/pleyades-api &
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8080/healthz; then
+              echo "API lista y respondiendo en el puerto 8080"
+              break
+            fi
+            echo "Esperando arranque del servidor..."
+            sleep 1
+          done
+
+      - name: Ejecutar OWASP ZAP API Scan (DAST)
+        run: |
+          docker run --rm --network="host" -v $(pwd):/zap/wrk/:rw -t ghcr.io/zaproxy/zaproxy:stable zap-api-scan.py \
+            -t http://127.0.0.1:8080/swagger/doc.json \
+            -f openapi \
+            -r zap_report.html \
+            -w zap_report.md || true
+
+      - name: Subir reporte de seguridad DAST (OWASP ZAP)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: zap-dast-report
+          path: |
+            zap_report.html
+            zap_report.md
+          if-no-files-found: warn
+          retention-days: 14

@@ -22,4 +22,6 @@ var (
 	ErrEmptyTenantOwnerID = errors.New("el ID del propietario del inquilino no puede estar vacío")
 	ErrTenantSlugConflict = errors.New("el slug del inquilino ya está registrado")
 	ErrTenantNotFound     = errors.New("el inquilino no fue encontrado")
+	ErrForbiddenTenantAccess = errors.New("acceso denegado: no es propietario de este inquilino")
+	ErrTenantIDRequired     = errors.New("el ID del inquilino es requerido")
 )

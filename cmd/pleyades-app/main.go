@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -42,15 +43,43 @@ func main() {
 	rateLimiter := middleware.NewRateLimiter(20.0, 50.0, 10*time.Minute)
 	hasher := crypto.NewBcryptHasher(bcrypt.DefaultCost)
 	tokenService := crypto.NewJWTTokenService(cfg.JWTSecret)
+	authMiddleware := middleware.NewAuthMiddleware(tokenService, 5*time.Minute, 15*time.Minute)
+	idempotency := middleware.NewIdempotencyMiddleware(10 * time.Minute)
 
 	userRepo := postgres.NewUserRepository(db)
+	tenantRepo := postgres.NewTenantRepository(db)
+
+	// Inicializar esquema de tenants de forma defensiva
+	initCtx, initCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := tenantRepo.InitSchema(initCtx); err != nil {
+		initCancel()
+		log.Fatalf("error fatal al inicializar esquema de tenants: %v", err)
+	}
+	initCancel()
+
+	dbPort, _ := strconv.Atoi(cfg.DB.Port)
+	if dbPort == 0 {
+		dbPort = 5432
+	}
+	tenantProvisioner := postgres.NewLocalPostgresTenantProvisioner(db, cfg.DB.Host, dbPort)
+
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
 	loginUseCase := usecase.NewLoginUserUseCase(userRepo, hasher, tokenService, 15*time.Minute)
+	tenantUseCase := usecase.NewCreateTenantUseCase(tenantRepo, tenantProvisioner)
 
 	userHandler := httpadapter.NewUserHandler(userUseCase)
 	authHandler := httpadapter.NewAuthHandler(loginUseCase)
+	tenantHandler := httpadapter.NewTenantHandler(tenantUseCase)
 
-	router := httpadapter.NewRouter(userHandler, authHandler, metrics, rateLimiter)
+	router := httpadapter.NewRouter(
+		userHandler,
+		authHandler,
+		tenantHandler,
+		metrics,
+		rateLimiter,
+		authMiddleware,
+		idempotency,
+	)
 
 	// 4. Configurar Servidor HTTP con Timeouts Cloud-Native
 	addr := fmt.Sprintf(":%s", cfg.ServerPort)

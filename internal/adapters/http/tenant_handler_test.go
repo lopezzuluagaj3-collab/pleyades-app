@@ -18,10 +18,10 @@ import (
 )
 
 type mockTenantRepoForHTTP struct {
-	saveFunc         func(ctx context.Context, tenant domain.Tenant) error
-	findBySlugFunc   func(ctx context.Context, slug string) (*domain.Tenant, error)
-	findByIDFunc     func(ctx context.Context, id string) (*domain.Tenant, error)
-	findByOwnerFunc  func(ctx context.Context, ownerUserID string) ([]domain.Tenant, error)
+	saveFunc        func(ctx context.Context, tenant domain.Tenant) error
+	findBySlugFunc  func(ctx context.Context, slug string) (*domain.Tenant, error)
+	findByIDFunc    func(ctx context.Context, id string) (*domain.Tenant, error)
+	findByOwnerFunc func(ctx context.Context, ownerUserID string) ([]domain.Tenant, error)
 }
 
 func (m *mockTenantRepoForHTTP) Save(ctx context.Context, tenant domain.Tenant) error {

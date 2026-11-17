@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"pleyades-app/internal/adapters/crypto"
 	"pleyades-app/internal/adapters/http"
+	"pleyades-app/internal/adapters/http/middleware"
 	"pleyades-app/internal/adapters/postgres"
 	"pleyades-app/internal/config"
 	"pleyades-app/internal/usecase"
@@ -37,7 +38,7 @@ func main() {
 	}()
 
 	// 3. Inyección de Dependencias
-	metrics := httpadapter.NewMetrics(prometheus.DefaultRegisterer)
+	metrics := middleware.NewMetrics(prometheus.DefaultRegisterer)
 	hasher := crypto.NewBcryptHasher(bcrypt.DefaultCost)
 	userRepo := postgres.NewUserRepository(db)
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)

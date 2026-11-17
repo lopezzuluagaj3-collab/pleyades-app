@@ -1,4 +1,4 @@
-package httpadapter
+package middleware
 
 import (
 	"net/http"
@@ -6,14 +6,12 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"pleyades-app/internal/usecase"
 )
 
 // TestMetricsSuite orquesta las pruebas unitarias de recolección y middleware de métricas
 func TestMetricsSuite(t *testing.T) {
 	t.Run("Metrics Middleware Recording", testMetricsMiddlewareRecording)
 	t.Run("Metrics Middleware Bypasses Scrape Endpoint", testMetricsBypassesScrapeEndpoint)
-	t.Run("Router Initialization and Routing", testRouterInitialization)
 }
 
 func testMetricsMiddlewareRecording(t *testing.T) {
@@ -83,25 +81,5 @@ func testMetricsBypassesScrapeEndpoint(t *testing.T) {
 	}
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-}
-
-func testRouterInitialization(t *testing.T) {
-	reg := prometheus.NewRegistry()
-	metrics := NewMetrics(reg)
-	userHandler := NewUserHandler(&usecase.RegisterUserUseCase{})
-
-	router := NewRouter(userHandler, metrics)
-	if router == nil {
-		t.Fatal("expected non-nil router instance")
-	}
-
-	// Verificar endpoints básicos de salud
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected /healthz to return %d, got %d", http.StatusOK, rec.Code)
 	}
 }

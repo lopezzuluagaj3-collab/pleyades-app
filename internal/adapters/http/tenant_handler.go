@@ -8,6 +8,7 @@ import (
 
 	"pleyades-app/internal/adapters/http/middleware"
 	"pleyades-app/internal/domain"
+	"pleyades-app/internal/ports"
 	"pleyades-app/internal/usecase"
 )
 
@@ -17,26 +18,49 @@ type CreateTenantRequest struct {
 	Slug string `json:"slug"`
 }
 
+// TenantDatabaseResponse expone de forma segura las credenciales de conexión del inquilino (Show-Once)
+type TenantDatabaseResponse struct {
+	Host             string `json:"host"`
+	Port             int    `json:"port"`
+	Name             string `json:"name"`
+	User             string `json:"user"`
+	Password         string `json:"password"`
+	ConnectionString string `json:"connection_string"`
+}
+
 // TenantResponse define la respuesta serializada al cliente
 type TenantResponse struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	OwnerUserID string    `json:"owner_user_id"`
-	Status      string    `json:"status"`
-	DBName      string    `json:"db_name"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string                  `json:"id"`
+	Name        string                  `json:"name"`
+	Slug        string                  `json:"slug"`
+	OwnerUserID string                  `json:"owner_user_id"`
+	Status      string                  `json:"status"`
+	DBName      string                  `json:"db_name"`
+	Database    *TenantDatabaseResponse `json:"database,omitempty"`
+	CreatedAt   time.Time               `json:"created_at"`
+}
+
+// ResetPasswordResponse define la respuesta con la nueva contraseña generada (Show-Once)
+type ResetPasswordResponse struct {
+	TenantID string                  `json:"tenant_id"`
+	Slug     string                  `json:"slug"`
+	Database *TenantDatabaseResponse `json:"database"`
 }
 
 // TenantHandler orquesta las operaciones HTTP sobre la entidad Tenant
 type TenantHandler struct {
 	createUseCase *usecase.CreateTenantUseCase
+	resetUseCase  *usecase.ResetTenantPasswordUseCase
 }
 
-// NewTenantHandler inicializa el manejador inyectando el caso de uso (DIP)
-func NewTenantHandler(createUseCase *usecase.CreateTenantUseCase) *TenantHandler {
+// NewTenantHandler inicializa el manejador inyectando sus casos de uso (DIP)
+func NewTenantHandler(
+	createUseCase *usecase.CreateTenantUseCase,
+	resetUseCase *usecase.ResetTenantPasswordUseCase,
+) *TenantHandler {
 	return &TenantHandler{
 		createUseCase: createUseCase,
+		resetUseCase:  resetUseCase,
 	}
 }
 
@@ -72,11 +96,65 @@ func (h *TenantHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OwnerUserID: output.OwnerUserID,
 		Status:      output.Status,
 		DBName:      output.DBName,
+		Database:    toDatabaseResponse(output.Database),
 		CreatedAt:   output.CreatedAt,
 	})
 }
 
+// ResetPassword maneja la petición POST /api/v1/tenants/{id}/reset-password
+func (h *TenantHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	claims, ok := middleware.UserFromContext(r.Context())
+	if !ok || claims == nil || claims.UUID == "" {
+		respondWithError(w, http.StatusUnauthorized, "no autorizado: sesión ausente o inválida")
+		return
+	}
+
+	tenantID := r.PathValue("id")
+	if tenantID == "" {
+		respondWithError(w, http.StatusBadRequest, "el ID del inquilino es requerido")
+		return
+	}
+
+	output, err := h.resetUseCase.Execute(r.Context(), usecase.ResetTenantPasswordInput{
+		TenantID:        tenantID,
+		RequesterUserID: claims.UUID,
+	})
+	if err != nil {
+		status, msg := mapTenantError(err)
+		respondWithError(w, status, msg)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, ResetPasswordResponse{
+		TenantID: output.TenantID,
+		Slug:     output.Slug,
+		Database: toDatabaseResponse(output.Database),
+	})
+}
+
+func toDatabaseResponse(creds *ports.TenantDBCredentials) *TenantDatabaseResponse {
+	if creds == nil {
+		return nil
+	}
+	return &TenantDatabaseResponse{
+		Host:             creds.Host,
+		Port:             creds.Port,
+		Name:             creds.DBName,
+		User:             creds.Username,
+		Password:         creds.Password,
+		ConnectionString: creds.ConnectionString,
+	}
+}
+
 func mapTenantError(err error) (int, string) {
+	if errors.Is(err, domain.ErrTenantNotFound) {
+		return http.StatusNotFound, err.Error()
+	}
+
+	if errors.Is(err, domain.ErrForbiddenTenantAccess) {
+		return http.StatusForbidden, err.Error()
+	}
+
 	if errors.Is(err, domain.ErrTenantSlugConflict) {
 		return http.StatusConflict, err.Error()
 	}
@@ -95,5 +173,6 @@ func isTenantValidationError(err error) bool {
 		errors.Is(err, domain.ErrLongTenantSlug) ||
 		errors.Is(err, domain.ErrShortTenantSlug) ||
 		errors.Is(err, domain.ErrInvalidTenantSlug) ||
-		errors.Is(err, domain.ErrEmptyTenantOwnerID)
+		errors.Is(err, domain.ErrEmptyTenantOwnerID) ||
+		errors.Is(err, domain.ErrTenantIDRequired)
 }

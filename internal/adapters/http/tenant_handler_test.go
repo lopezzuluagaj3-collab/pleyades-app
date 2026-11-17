@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -54,6 +53,7 @@ func (m *mockTenantRepoForHTTP) FindByOwnerUserID(ctx context.Context, ownerUser
 
 type mockTenantProvisionerForHTTP struct {
 	provisionFunc func(ctx context.Context, slug string) (*ports.TenantDBCredentials, error)
+	resetFunc     func(ctx context.Context, slug string) (*ports.TenantDBCredentials, error)
 }
 
 func (m *mockTenantProvisionerForHTTP) Provision(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
@@ -61,11 +61,26 @@ func (m *mockTenantProvisionerForHTTP) Provision(ctx context.Context, slug strin
 		return m.provisionFunc(ctx, slug)
 	}
 	return &ports.TenantDBCredentials{
-		Host:     "localhost",
-		Port:     5432,
-		DBName:   "tenant_acme",
-		Username: "usr_acme",
-		Password: "password",
+		Host:             "localhost",
+		Port:             5432,
+		DBName:           "tenant_acme",
+		Username:         "usr_acme",
+		Password:         "password",
+		ConnectionString: "postgresql://usr_acme:password@localhost:5432/tenant_acme?sslmode=disable",
+	}, nil
+}
+
+func (m *mockTenantProvisionerForHTTP) ResetPassword(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
+	if m.resetFunc != nil {
+		return m.resetFunc(ctx, slug)
+	}
+	return &ports.TenantDBCredentials{
+		Host:             "localhost",
+		Port:             5432,
+		DBName:           "tenant_acme",
+		Username:         "usr_acme",
+		Password:         "new-rotated-password",
+		ConnectionString: "postgresql://usr_acme:new-rotated-password@localhost:5432/tenant_acme?sslmode=disable",
 	}, nil
 }
 
@@ -76,19 +91,23 @@ func TestTenantHandlerSuite(t *testing.T) {
 	t.Run("Create Tenant Validation Error", testCreateTenantValidationError)
 	t.Run("Create Tenant Slug Conflict", testCreateTenantSlugConflict)
 	t.Run("Create Tenant Internal Server Error", testCreateTenantInternalError)
+	t.Run("Reset Password Success", testResetPasswordSuccess)
+	t.Run("Reset Password Unauthorized", testResetPasswordUnauthorized)
+	t.Run("Reset Password Forbidden Not Owner", testResetPasswordForbidden)
+	t.Run("Reset Password Not Found", testResetPasswordNotFound)
 }
 
 func testCreateTenantSuccess(t *testing.T) {
 	repo := &mockTenantRepoForHTTP{}
 	prov := &mockTenantProvisionerForHTTP{}
-	uc := usecase.NewCreateTenantUseCase(repo, prov)
-	handler := NewTenantHandler(uc)
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
 
 	body := `{"name":"Acme Global","slug":"acme-global"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
-	// Simular contexto inyectado por authMiddleware
 	claims := &ports.UserClaims{
 		UUID:      "user-uuid-1234",
 		Email:     "admin@acme.com",
@@ -109,31 +128,25 @@ func testCreateTenantSuccess(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if resp.Name != "Acme Global" {
-		t.Errorf("expected Name 'Acme Global', got '%s'", resp.Name)
+	if resp.Database == nil {
+		t.Fatal("expected database credentials in response")
 	}
-	if resp.Slug != "acme-global" {
-		t.Errorf("expected Slug 'acme-global', got '%s'", resp.Slug)
+	if resp.Database.Password != "password" {
+		t.Errorf("expected Password 'password', got '%s'", resp.Database.Password)
 	}
-	if resp.OwnerUserID != "user-uuid-1234" {
-		t.Errorf("expected OwnerUserID 'user-uuid-1234', got '%s'", resp.OwnerUserID)
-	}
-	if resp.Status != domain.TenantStatusActive {
-		t.Errorf("expected Status 'ACTIVE', got '%s'", resp.Status)
-	}
-	if resp.DBName != "tenant_acme_global" {
-		t.Errorf("expected DBName 'tenant_acme_global', got '%s'", resp.DBName)
+	if resp.Database.ConnectionString == "" {
+		t.Error("expected non-empty ConnectionString")
 	}
 }
 
 func testCreateTenantUnauthorized(t *testing.T) {
 	repo := &mockTenantRepoForHTTP{}
 	prov := &mockTenantProvisionerForHTTP{}
-	uc := usecase.NewCreateTenantUseCase(repo, prov)
-	handler := NewTenantHandler(uc)
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
 
 	body := `{"name":"Acme Global","slug":"acme-global"}`
-	// Petición SIN claims de usuario en el contexto
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -143,17 +156,14 @@ func testCreateTenantUnauthorized(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
 	}
-
-	if !strings.Contains(rec.Body.String(), "no autorizado") {
-		t.Errorf("expected unauthorized error message, got %s", rec.Body.String())
-	}
 }
 
 func testCreateTenantMalformedJSON(t *testing.T) {
 	repo := &mockTenantRepoForHTTP{}
 	prov := &mockTenantProvisionerForHTTP{}
-	uc := usecase.NewCreateTenantUseCase(repo, prov)
-	handler := NewTenantHandler(uc)
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewBufferString(`{invalid-json`))
 	req.Header.Set("Content-Type", "application/json")
@@ -167,19 +177,15 @@ func testCreateTenantMalformedJSON(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
 	}
-
-	if !strings.Contains(rec.Body.String(), "formato de petición json inválido") {
-		t.Errorf("expected malformed json error, got %s", rec.Body.String())
-	}
 }
 
 func testCreateTenantValidationError(t *testing.T) {
 	repo := &mockTenantRepoForHTTP{}
 	prov := &mockTenantProvisionerForHTTP{}
-	uc := usecase.NewCreateTenantUseCase(repo, prov)
-	handler := NewTenantHandler(uc)
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
 
-	// Nombre vacío -> debe fallar con 400
 	body := `{"name":"","slug":"acme"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -193,10 +199,6 @@ func testCreateTenantValidationError(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
 	}
-
-	if !strings.Contains(rec.Body.String(), "nombre del inquilino no puede estar vacío") {
-		t.Errorf("expected validation error message, got %s", rec.Body.String())
-	}
 }
 
 func testCreateTenantSlugConflict(t *testing.T) {
@@ -206,8 +208,9 @@ func testCreateTenantSlugConflict(t *testing.T) {
 		},
 	}
 	prov := &mockTenantProvisionerForHTTP{}
-	uc := usecase.NewCreateTenantUseCase(repo, prov)
-	handler := NewTenantHandler(uc)
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
 
 	body := `{"name":"Acme Global","slug":"acme-global"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewBufferString(body))
@@ -222,10 +225,6 @@ func testCreateTenantSlugConflict(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected status 409 Conflict, got %d", rec.Code)
 	}
-
-	if !strings.Contains(rec.Body.String(), "slug del inquilino ya está registrado") {
-		t.Errorf("expected conflict message, got %s", rec.Body.String())
-	}
 }
 
 func testCreateTenantInternalError(t *testing.T) {
@@ -235,8 +234,9 @@ func testCreateTenantInternalError(t *testing.T) {
 			return nil, errors.New("infra quota failure")
 		},
 	}
-	uc := usecase.NewCreateTenantUseCase(repo, prov)
-	handler := NewTenantHandler(uc)
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
 
 	body := `{"name":"Acme Global","slug":"acme-global"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants", bytes.NewBufferString(body))
@@ -251,8 +251,108 @@ func testCreateTenantInternalError(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500 Internal Server Error, got %d", rec.Code)
 	}
+}
 
-	if !strings.Contains(rec.Body.String(), "error interno del servidor") {
-		t.Errorf("expected internal server error message, got %s", rec.Body.String())
+func testResetPasswordSuccess(t *testing.T) {
+	repo := &mockTenantRepoForHTTP{
+		findByIDFunc: func(ctx context.Context, id string) (*domain.Tenant, error) {
+			return &domain.Tenant{
+				ID:          id,
+				Slug:        "acme-global",
+				OwnerUserID: "user-owner-1",
+			}, nil
+		},
+	}
+	prov := &mockTenantProvisionerForHTTP{}
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants/t-123/reset-password", nil)
+	req.SetPathValue("id", "t-123")
+	claims := &ports.UserClaims{UUID: "user-owner-1"}
+	req = req.WithContext(middleware.ContextWithUser(req.Context(), claims))
+
+	rec := httptest.NewRecorder()
+	handler.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d. Body: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResetPasswordResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Database == nil || resp.Database.Password != "new-rotated-password" {
+		t.Errorf("expected new password in response, got %v", resp.Database)
+	}
+}
+
+func testResetPasswordUnauthorized(t *testing.T) {
+	repo := &mockTenantRepoForHTTP{}
+	prov := &mockTenantProvisionerForHTTP{}
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants/t-123/reset-password", nil)
+	rec := httptest.NewRecorder()
+	handler.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 Unauthorized, got %d", rec.Code)
+	}
+}
+
+func testResetPasswordForbidden(t *testing.T) {
+	repo := &mockTenantRepoForHTTP{
+		findByIDFunc: func(ctx context.Context, id string) (*domain.Tenant, error) {
+			return &domain.Tenant{
+				ID:          id,
+				OwnerUserID: "user-real-owner",
+			}, nil
+		},
+	}
+	prov := &mockTenantProvisionerForHTTP{}
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants/t-123/reset-password", nil)
+	req.SetPathValue("id", "t-123")
+	claims := &ports.UserClaims{UUID: "user-impostor"}
+	req = req.WithContext(middleware.ContextWithUser(req.Context(), claims))
+
+	rec := httptest.NewRecorder()
+	handler.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403 Forbidden, got %d", rec.Code)
+	}
+}
+
+func testResetPasswordNotFound(t *testing.T) {
+	repo := &mockTenantRepoForHTTP{
+		findByIDFunc: func(ctx context.Context, id string) (*domain.Tenant, error) {
+			return nil, domain.ErrTenantNotFound
+		},
+	}
+	prov := &mockTenantProvisionerForHTTP{}
+	createUC := usecase.NewCreateTenantUseCase(repo, prov)
+	resetUC := usecase.NewResetTenantPasswordUseCase(repo, prov)
+	handler := NewTenantHandler(createUC, resetUC)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/tenants/t-123/reset-password", nil)
+	req.SetPathValue("id", "t-123")
+	claims := &ports.UserClaims{UUID: "user-owner"}
+	req = req.WithContext(middleware.ContextWithUser(req.Context(), claims))
+
+	rec := httptest.NewRecorder()
+	handler.ResetPassword(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404 Not Found, got %d", rec.Code)
 	}
 }

@@ -11,6 +11,7 @@ import (
 type Config struct {
 	ServerPort string
 	DB         postgres.DBConfig
+	JWTSecret  string
 }
 
 func getEnv(key, defaultValue string) string {
@@ -86,8 +87,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	jwtSecret := getEnv("JWT_SECRET", "super-secret-pleyades-enterprise-key-for-local-dev-123456789")
+
 	return Config{
 		ServerPort: SERVER_PORT,
+		JWTSecret:  jwtSecret,
 		DB: postgres.DBConfig{
 			Host:     host,
 			Port:     DB_PORT,

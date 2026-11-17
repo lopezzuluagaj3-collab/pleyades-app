@@ -47,4 +47,7 @@ func testConfigSuccess(t *testing.T) {
 	if cfg.DB.Host != "localhost" {
 		t.Errorf("expected DB Host localhost, got %s", cfg.DB.Host)
 	}
+	if cfg.JWTSecret == "" {
+		t.Errorf("expected non-empty default JWTSecret")
+	}
 }

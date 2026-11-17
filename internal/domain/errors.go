@@ -12,4 +12,5 @@ var (
 	ErrEmptyPass          = errors.New("la contraseña no puede estar vacía")
 	ErrUserNotFound       = errors.New("el usuario no fue encontrado")
 	ErrValidatePass       = errors.New("la contraseña ingresada debe contener un carácter especial, números y una mayúscula")
+	ErrInvalidCredentials = errors.New("credenciales inválidas")
 )

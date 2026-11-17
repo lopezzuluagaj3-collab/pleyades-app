@@ -60,28 +60,30 @@ func (m *mockTenantProvisionerForHTTP) Provision(ctx context.Context, slug strin
 	if m.provisionFunc != nil {
 		return m.provisionFunc(ctx, slug)
 	}
-	return &ports.TenantDBCredentials{
-		Host:             "localhost",
-		Port:             5432,
-		DBName:           "tenant_acme",
-		Username:         "usr_acme",
-		Password:         "password",
-		ConnectionString: "postgresql://usr_acme:password@localhost:5432/tenant_acme?sslmode=disable",
-	}, nil
+	creds := &ports.TenantDBCredentials{
+		Host:     "localhost",
+		Port:     5432,
+		DBName:   "tenant_acme",
+		Username: "usr_acme",
+		Password: "mock-password",
+	}
+	creds.ConnectionString = creds.BuildConnectionString("disable")
+	return creds, nil
 }
 
 func (m *mockTenantProvisionerForHTTP) ResetPassword(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
 	if m.resetFunc != nil {
 		return m.resetFunc(ctx, slug)
 	}
-	return &ports.TenantDBCredentials{
-		Host:             "localhost",
-		Port:             5432,
-		DBName:           "tenant_acme",
-		Username:         "usr_acme",
-		Password:         "new-rotated-password",
-		ConnectionString: "postgresql://usr_acme:new-rotated-password@localhost:5432/tenant_acme?sslmode=disable",
-	}, nil
+	creds := &ports.TenantDBCredentials{
+		Host:     "localhost",
+		Port:     5432,
+		DBName:   "tenant_acme",
+		Username: "usr_acme",
+		Password: "new-rotated-password",
+	}
+	creds.ConnectionString = creds.BuildConnectionString("disable")
+	return creds, nil
 }
 
 func TestTenantHandlerSuite(t *testing.T) {
@@ -131,8 +133,8 @@ func testCreateTenantSuccess(t *testing.T) {
 	if resp.Database == nil {
 		t.Fatal("expected database credentials in response")
 	}
-	if resp.Database.Password != "password" {
-		t.Errorf("expected Password 'password', got '%s'", resp.Database.Password)
+	if resp.Database.Password != "mock-password" {
+		t.Errorf("expected Password 'mock-password', got '%s'", resp.Database.Password)
 	}
 	if resp.Database.ConnectionString == "" {
 		t.Error("expected non-empty ConnectionString")

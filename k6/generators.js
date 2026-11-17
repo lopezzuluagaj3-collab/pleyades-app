@@ -2,7 +2,7 @@
 
 /**
  * Genera un payload válido para el registro de usuarios.
- * Garantiza unicidad mediante el Virtual User ID (__VU), el número de iteración (__ITER) y timestamp.
+ * Garantiza unicidad determinista mediante el Virtual User ID (__VU), el número de iteración (__ITER) y marca de tiempo.
  * Cumple estrictamente con las reglas de negocio del dominio:
  * - Email con formato válido y único.
  * - Nombre alfabético sin números ni caracteres especiales (<50 caracteres).
@@ -14,8 +14,7 @@
  */
 export function generateValidUserPayload(vu, iter) {
   const timestamp = Date.now();
-  const randomSuffix = Math.floor(Math.random() * 10000);
-  const email = `load_vu${vu}_it${iter}_${timestamp}_${randomSuffix}@pleyades.io`;
+  const email = `load_vu${vu}_it${iter}_${timestamp}@pleyades.io`;
 
   const user = {
     email: email,

@@ -23,12 +23,13 @@ export function validateRegisterResponse(response) {
   const passed = check(response, {
     'status is 201 Created': (r) => r.status === 201,
     'content-type is application/json': (r) =>
-      r.headers['Content-Type'] && r.headers['Content-Type'].includes('application/json'),
+      r.headers['Content-Type']?.includes('application/json') ?? false,
     'response body contains generated uuid': (r) => {
       try {
         const body = JSON.parse(r.body);
-        return body && typeof body.uuid === 'string' && body.uuid.length > 0;
-      } catch (err) {
+        return typeof body?.uuid === 'string' && body.uuid.length > 0;
+      } catch {
+        // Retorna false si la respuesta no es un JSON parseable o carece de uuid
         return false;
       }
     },

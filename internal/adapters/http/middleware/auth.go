@@ -77,16 +77,28 @@ func (m *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 }
 
 func extractBearerToken(authHeader string) (string, error) {
-	if authHeader == "" {
+	clean := strings.TrimSpace(authHeader)
+	clean = strings.Trim(clean, `"'`) // Elimina comillas accidentales
+	if clean == "" {
 		return "", errors.New("cabecera authorization vacía")
 	}
 
-	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
-		return "", errors.New("formato bearer inválido")
+	// 1. Si viene con el prefijo "Bearer <token>" (estándar RFC 6750)
+	if len(clean) > 7 && strings.EqualFold(clean[:7], "bearer ") {
+		token := strings.TrimSpace(clean[7:])
+		token = strings.Trim(token, `"'`)
+		if token == "" {
+			return "", errors.New("token bearer vacío")
+		}
+		return token, nil
 	}
 
-	return strings.TrimSpace(parts[1]), nil
+	// 2. Si el usuario pegó directamente el token JWT (muy común en Swagger UI o clientes HTTP)
+	if strings.HasPrefix(clean, "eyJ") {
+		return clean, nil
+	}
+
+	return "", errors.New("formato bearer inválido")
 }
 
 func respondAuthError(w http.ResponseWriter, status int, message string) {

@@ -10,6 +10,8 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - '.github/workflows/**'
+      - 'Dockerfile'
+      - '.dockerignore'
   pull_request:
     branches:
       - main
@@ -19,6 +21,8 @@ on:
       - 'go.sum'
       - '.golangci.yml'
       - '.github/workflows/**'
+      - 'Dockerfile'
+      - '.dockerignore'
   workflow_dispatch:
 
 permissions:
@@ -149,3 +153,19 @@ jobs:
           path: trivy-fs-report.txt
           if-no-files-found: warn
           retention-days: 14
+
+  # =========================================================
+  # 5. Verificación de Compilación de Imagen Docker (Multi-Stage Distroless)
+  # =========================================================
+  docker-build:
+    name: '5. Docker Container Build Verification'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Compilar imagen Docker de producción
+        run: |
+          docker build -t pleyades-app:ci .
+          docker images pleyades-app:ci

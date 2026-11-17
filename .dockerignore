@@ -1,0 +1,26 @@
+# Control de versiones
+.git
+.gitignore
+.github
+
+# Linters, Cobertura y Binarios Locales
+.golangci.yml
+coverage.out
+*.exe
+*.test
+*.out
+tmp/
+
+# Secretos y Variables de Entorno (Crítico: Prevenir fugas en imágenes Docker)
+.env
+.env.*
+*.pem
+*.key
+
+# Documentación, Scripts de Pruebas y Cargas
+*.md
+k6/
+
+# IDEs y Editores
+.idea/
+.vscode/

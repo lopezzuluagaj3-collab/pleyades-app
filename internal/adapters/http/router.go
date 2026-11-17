@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"pleyades-app/internal/adapters/http/middleware"
 )
 
@@ -25,6 +26,12 @@ func NewRouter(
 
 	// Exposición de métricas Prometheus
 	mux.Handle("GET /metrics", promhttp.Handler())
+
+	// Documentación interactiva Swagger UI
+	mux.HandleFunc("GET /swagger/", httpSwagger.WrapHandler)
+	mux.HandleFunc("GET /swagger", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger/index.html", http.StatusMovedPermanently)
+	})
 
 	// Endpoints públicos de usuarios y autenticación
 	mux.HandleFunc("POST /api/v1/users", userHandler.Register)

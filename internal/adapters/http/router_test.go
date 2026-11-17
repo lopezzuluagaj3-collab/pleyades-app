@@ -67,4 +67,12 @@ func TestRouterSuite(t *testing.T) {
 	if recReset.Code != http.StatusUnauthorized {
 		t.Errorf("expected /api/v1/tenants/{id}/reset-password without token to return %d, got %d", http.StatusUnauthorized, recReset.Code)
 	}
+
+	// 4. Verificar redirección de Swagger UI
+	reqSwagger := httptest.NewRequest(http.MethodGet, "/swagger", nil)
+	recSwagger := httptest.NewRecorder()
+	router.ServeHTTP(recSwagger, reqSwagger)
+	if recSwagger.Code != http.StatusMovedPermanently {
+		t.Errorf("expected /swagger to redirect with %d, got %d", http.StatusMovedPermanently, recSwagger.Code)
+	}
 }

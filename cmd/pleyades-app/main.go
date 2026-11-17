@@ -1,5 +1,24 @@
 package main
 
+// @title Pleyades Multi-Tenant Microservice API
+// @version 1.0
+// @description SaaS Cloud-Native Engine & Multi-Tenant Provisioner for Kubernetes.
+// @termsOfService https://pleyades.io/terms
+
+// @contact.name Equipo de Arquitectura Pleyades
+// @contact.email arquitecto@pleyades.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Ingrese "Bearer <token>" obtenido al iniciar sesión en /api/v1/auth/login
+
 import (
 	"context"
 	"fmt"
@@ -13,6 +32,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/crypto/bcrypt"
+	_ "pleyades-app/docs"
 	"pleyades-app/internal/adapters/crypto"
 	"pleyades-app/internal/adapters/http"
 	"pleyades-app/internal/adapters/http/middleware"

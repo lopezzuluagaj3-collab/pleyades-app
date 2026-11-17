@@ -34,15 +34,16 @@ func TestResetTenantPasswordUseCaseSuite(t *testing.T) {
 
 func testResetPasswordHappyPath(t *testing.T) {
 	repo := newMockTenantRepository()
+	newCreds := &ports.TenantDBCredentials{
+		Host:     "localhost",
+		Port:     5432,
+		DBName:   "tenant_acme",
+		Username: "usr_acme",
+		Password: "new-super-secret-pass",
+	}
+	newCreds.ConnectionString = newCreds.BuildConnectionString("disable")
 	resetter := &mockPasswordResetter{
-		mockNewCreds: &ports.TenantDBCredentials{
-			Host:             "localhost",
-			Port:             5432,
-			DBName:           "tenant_acme",
-			Username:         "usr_acme",
-			Password:         "new-super-secret-pass",
-			ConnectionString: "postgresql://usr_acme:new-super-secret-pass@localhost:5432/tenant_acme?sslmode=disable",
-		},
+		mockNewCreds: newCreds,
 	}
 
 	tenant := domain.Tenant{

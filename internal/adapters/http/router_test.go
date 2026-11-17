@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"pleyades-app/internal/adapters/http/middleware"
-	"pleyades-app/internal/ports"
 	"pleyades-app/internal/usecase"
 )
 
@@ -56,15 +55,4 @@ func TestRouterSuite(t *testing.T) {
 	if recTenant.Code != http.StatusUnauthorized {
 		t.Errorf("expected /api/v1/tenants without token to return %d, got %d", http.StatusUnauthorized, recTenant.Code)
 	}
-}
-
-// Mock simple para Router test
-type mockTokenServiceForRouter struct{}
-
-func (m *mockTokenServiceForRouter) Generate(uuid, email string, ttl time.Duration) (string, error) {
-	return "mock-token", nil
-}
-
-func (m *mockTokenServiceForRouter) Validate(tokenString string) (*ports.UserClaims, error) {
-	return nil, ports.ErrInvalidToken
 }

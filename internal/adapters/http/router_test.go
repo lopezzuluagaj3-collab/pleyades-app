@@ -23,7 +23,10 @@ func TestRouterSuite(t *testing.T) {
 
 	userHandler := NewUserHandler(&usecase.RegisterUserUseCase{})
 	authHandler := NewAuthHandler(&usecase.LoginUserUseCase{})
-	tenantHandler := NewTenantHandler(&usecase.CreateTenantUseCase{})
+	tenantHandler := NewTenantHandler(
+		&usecase.CreateTenantUseCase{},
+		&usecase.ResetTenantPasswordUseCase{},
+	)
 
 	router := NewRouter(
 		userHandler,
@@ -54,5 +57,14 @@ func TestRouterSuite(t *testing.T) {
 
 	if recTenant.Code != http.StatusUnauthorized {
 		t.Errorf("expected /api/v1/tenants without token to return %d, got %d", http.StatusUnauthorized, recTenant.Code)
+	}
+
+	// 3. Verificar que la ruta protegida /api/v1/tenants/{id}/reset-password también rechace peticiones no autenticadas (401)
+	reqReset := httptest.NewRequest(http.MethodPost, "/api/v1/tenants/t-123/reset-password", nil)
+	recReset := httptest.NewRecorder()
+	router.ServeHTTP(recReset, reqReset)
+
+	if recReset.Code != http.StatusUnauthorized {
+		t.Errorf("expected /api/v1/tenants/{id}/reset-password without token to return %d, got %d", http.StatusUnauthorized, recReset.Code)
 	}
 }

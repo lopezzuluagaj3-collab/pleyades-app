@@ -79,13 +79,59 @@ func (p *LocalPostgresTenantProvisioner) Provision(ctx context.Context, slug str
 		return nil, fmt.Errorf("postgres provisioner: error al otorgar privilegios a '%s' sobre '%s': %w", username, dbName, err)
 	}
 
-	return &ports.TenantDBCredentials{
+	creds := &ports.TenantDBCredentials{
 		Host:     p.host,
 		Port:     p.port,
 		DBName:   dbName,
 		Username: username,
 		Password: password,
-	}, nil
+	}
+	creds.ConnectionString = creds.BuildConnectionString("disable")
+
+	return creds, nil
+}
+
+// ResetPassword rota la contraseña del usuario de base de datos en PostgreSQL
+func (p *LocalPostgresTenantProvisioner) ResetPassword(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
+	if !validSlugIdentifier.MatchString(slug) {
+		return nil, fmt.Errorf("postgres provisioner: slug inválido '%s'", slug)
+	}
+
+	sanitized := strings.ReplaceAll(slug, "-", "_")
+	dbName := fmt.Sprintf("tenant_%s", sanitized)
+	username := fmt.Sprintf("usr_%s", sanitized)
+	newPassword, err := generateSecurePassword(16)
+	if err != nil {
+		return nil, fmt.Errorf("postgres provisioner: fallo al generar nueva contraseña: %w", err)
+	}
+
+	// 1. Verificar existencia del rol
+	var userExists bool
+	checkUserQuery := "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)"
+	if err := p.db.QueryRowContext(ctx, checkUserQuery, username).Scan(&userExists); err != nil {
+		return nil, fmt.Errorf("postgres provisioner: error al consultar existencia de usuario: %w", err)
+	}
+	if !userExists {
+		return nil, fmt.Errorf("postgres provisioner: el usuario '%s' no existe en postgres", username)
+	}
+
+	// 2. Modificar contraseña en PostgreSQL (ALTER USER "usr_..." WITH ENCRYPTED PASSWORD '...')
+	escapedPass := strings.ReplaceAll(newPassword, "'", "''")
+	alterUserStmt := fmt.Sprintf(`ALTER USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
+	if _, err := p.db.ExecContext(ctx, alterUserStmt); err != nil { // NOSONAR: Identifiers and passwords are sanitized
+		return nil, fmt.Errorf("postgres provisioner: error al rotar contraseña de usuario '%s': %w", username, err)
+	}
+
+	creds := &ports.TenantDBCredentials{
+		Host:     p.host,
+		Port:     p.port,
+		DBName:   dbName,
+		Username: username,
+		Password: newPassword,
+	}
+	creds.ConnectionString = creds.BuildConnectionString("disable")
+
+	return creds, nil
 }
 
 func generateSecurePassword(bytesLen int) (string, error) {

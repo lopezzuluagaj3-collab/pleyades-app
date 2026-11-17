@@ -66,10 +66,11 @@ func main() {
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
 	loginUseCase := usecase.NewLoginUserUseCase(userRepo, hasher, tokenService, 15*time.Minute)
 	tenantUseCase := usecase.NewCreateTenantUseCase(tenantRepo, tenantProvisioner)
+	resetPasswordUseCase := usecase.NewResetTenantPasswordUseCase(tenantRepo, tenantProvisioner)
 
 	userHandler := httpadapter.NewUserHandler(userUseCase)
 	authHandler := httpadapter.NewAuthHandler(loginUseCase)
-	tenantHandler := httpadapter.NewTenantHandler(tenantUseCase)
+	tenantHandler := httpadapter.NewTenantHandler(tenantUseCase, resetPasswordUseCase)
 
 	router := httpadapter.NewRouter(
 		userHandler,

@@ -36,6 +36,11 @@ func NewRouter(
 		authMiddleware.Middleware,
 		idempotency.Middleware,
 	))
+	mux.Handle("POST /api/v1/tenants/{id}/reset-password", middleware.Chain(
+		http.HandlerFunc(tenantHandler.ResetPassword),
+		authMiddleware.Middleware,
+		idempotency.Middleware,
+	))
 
 	return middleware.Chain(mux,
 		metrics.Middleware,

@@ -141,6 +141,12 @@ func testCreateTenantHappyPath(t *testing.T) {
 	if output.OwnerUserID != "user-uuid-1234" {
 		t.Errorf("expected OwnerUserID 'user-uuid-1234', got '%s'", output.OwnerUserID)
 	}
+	if output.Database == nil {
+		t.Fatal("expected non-nil Database credentials in output")
+	}
+	if output.Database.Password != "secure-password" {
+		t.Errorf("expected Password 'secure-password', got '%s'", output.Database.Password)
+	}
 	if len(prov.provisionCalls) != 1 || prov.provisionCalls[0] != "acme-global" {
 		t.Errorf("expected 1 provision call for 'acme-global', got %v", prov.provisionCalls)
 	}

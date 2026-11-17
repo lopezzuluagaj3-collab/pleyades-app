@@ -157,20 +157,30 @@ func testAuthValidToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	rec := httptest.NewRecorder()
-
-	authMw.Middleware(dummyHandler).ServeHTTP(rec, req)
-
-	if !handlerExecuted {
-		t.Errorf("expected protected handler to execute for valid token")
+	flexibleHeaders := []string{
+		"Bearer valid-token",
+		"\"Bearer valid-token\"",
+		"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token",
+		"\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token\"",
 	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", rec.Code)
-	}
-	if rec.Header().Get("X-Renewed-Token") != "" {
-		t.Errorf("expected no X-Renewed-Token when remaining TTL is above threshold")
+
+	for _, headerVal := range flexibleHeaders {
+		req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+		req.Header.Set("Authorization", headerVal)
+		rec := httptest.NewRecorder()
+
+		handlerExecuted = false
+		authMw.Middleware(dummyHandler).ServeHTTP(rec, req)
+
+		if !handlerExecuted {
+			t.Errorf("expected protected handler to execute for header %s", headerVal)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("expected status 200 for header %s, got %d", headerVal, rec.Code)
+		}
+		if rec.Header().Get("X-Renewed-Token") != "" {
+			t.Errorf("expected no X-Renewed-Token when remaining TTL is above threshold")
+		}
 	}
 }
 

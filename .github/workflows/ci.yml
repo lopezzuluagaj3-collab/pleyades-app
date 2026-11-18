@@ -27,7 +27,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 jobs:
   # =========================================================
@@ -265,3 +264,83 @@ jobs:
             zap_report.md
           if-no-files-found: warn
           retention-days: 14
+
+  # =========================================================
+  # 7. Publicación de Contenedor y Promoción GitOps (Continuous Delivery)
+  # =========================================================
+  cd-release-promote:
+    name: '7. Container Publish & GitOps Promotion PR'
+    runs-on: ubuntu-latest
+    needs:
+      - secret-scan
+      - lint-and-quality
+      - unit-tests
+      - dependency-scan
+      - docker-build
+      - dast-security
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout del código de la aplicación
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Iniciar sesión en GitHub Container Registry (GHCR)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Compilar y publicar imagen de producción en GHCR
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository_owner }}/pleyades-app"
+          COMMIT_TAG="${{ github.sha }}"
+
+          echo "Compilando y etiquetando imagen: $IMAGE_NAME:$COMMIT_TAG"
+          docker build -t "$IMAGE_NAME:$COMMIT_TAG" -t "$IMAGE_NAME:latest" .
+
+          echo "Subiendo imagen a GHCR..."
+          docker push "$IMAGE_NAME:$COMMIT_TAG"
+          docker push "$IMAGE_NAME:latest"
+
+      - name: Disparar Pull Request de Promoción en pleyades-gitops
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PROMOTION_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "Clonando repositorio GitOps..."
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository_owner }}/pleyades-gitops.git" gitops-repo
+          cd gitops-repo
+
+          BRANCH_NAME="chore/bump-pleyades-app-${{ github.sha }}"
+          git checkout -b "$BRANCH_NAME"
+
+          NEW_IMAGE="ghcr.io/${{ github.repository_owner }}/pleyades-app:${{ github.sha }}"
+          echo "Actualizando apps/app/deployment.yaml con: $NEW_IMAGE"
+
+          # Reemplazar la imagen en el deployment declarativo
+          sed -i "s|image: ghcr.io/.*/pleyades-app:.*|image: $NEW_IMAGE|g" apps/app/deployment.yaml
+
+          git add apps/app/deployment.yaml
+          git commit -m "chore(release): bump pleyades-app to ${{ github.sha }}"
+          git push origin "$BRANCH_NAME"
+
+          echo "Abriendo Pull Request automatizado en pleyades-gitops..."
+          gh pr create \
+            --repo "${{ github.repository_owner }}/pleyades-gitops" \
+            --head "$BRANCH_NAME" \
+            --base "main" \
+            --title "chore(release): bump pleyades-app to ${{ github.sha }}" \
+            --body "### 🚀 Promoción Automatizada de GitOps (Pléyades)
+
+          Este Pull Request fue generado automáticamente por la tubería de CI/CD de **\`pleyades-app\`** tras superar satisfactoriamente las 6 compuertas DevSecOps.
+
+          * **Nueva Imagen:** \`$NEW_IMAGE\`
+          * **Commit SHA:** \`${{ github.sha }}\`
+          * **Workflow Run:** https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          * **Disparado por:** @${{ github.actor }}
+
+          Al fusionar este Pull Request a \`main\`, **ArgoCD** reconciliará automáticamente el clúster AKS desplegando la nueva versión sin caída del servicio (*RollingUpdate*)."

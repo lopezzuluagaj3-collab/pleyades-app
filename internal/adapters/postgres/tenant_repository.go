@@ -31,11 +31,14 @@ func (r *TenantRepository) InitSchema(ctx context.Context) error {
 			owner_user_id UUID NOT NULL,
 			status VARCHAR(20) NOT NULL,
 			db_name VARCHAR(63) NOT NULL,
+			pool_id UUID,
 			created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 			updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 		);
+		ALTER TABLE tenants ADD COLUMN IF NOT EXISTS pool_id UUID;
 		CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
 		CREATE INDEX IF NOT EXISTS idx_tenants_owner ON tenants(owner_user_id);
+		CREATE INDEX IF NOT EXISTS idx_tenants_pool ON tenants(pool_id);
 	`
 	_, err := r.db.ExecContext(ctx, query)
 	if err != nil {
@@ -47,9 +50,14 @@ func (r *TenantRepository) InitSchema(ctx context.Context) error {
 // Save inserta un nuevo inquilino en la base de datos de forma atómica
 func (r *TenantRepository) Save(ctx context.Context, tenant domain.Tenant) error {
 	query := `
-		INSERT INTO tenants (id, name, slug, owner_user_id, status, db_name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO tenants (id, name, slug, owner_user_id, status, db_name, pool_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
+	var poolID sql.NullString
+	if tenant.PoolID != "" {
+		poolID = sql.NullString{String: tenant.PoolID, Valid: true}
+	}
+
 	_, err := r.db.ExecContext(ctx, query,
 		tenant.ID,
 		tenant.Name,
@@ -57,6 +65,7 @@ func (r *TenantRepository) Save(ctx context.Context, tenant domain.Tenant) error
 		tenant.OwnerUserID,
 		tenant.Status,
 		tenant.DBName,
+		poolID,
 		tenant.CreatedAt,
 		tenant.UpdatedAt,
 	)
@@ -69,7 +78,7 @@ func (r *TenantRepository) Save(ctx context.Context, tenant domain.Tenant) error
 // FindByID busca un inquilino por su UUID identificador
 func (r *TenantRepository) FindByID(ctx context.Context, id string) (*domain.Tenant, error) {
 	query := `
-		SELECT id, name, slug, owner_user_id, status, db_name, created_at, updated_at
+		SELECT id, name, slug, owner_user_id, status, db_name, COALESCE(pool_id::text, ''), created_at, updated_at
 		FROM tenants
 		WHERE id = $1
 	`
@@ -81,6 +90,7 @@ func (r *TenantRepository) FindByID(ctx context.Context, id string) (*domain.Ten
 		&t.OwnerUserID,
 		&t.Status,
 		&t.DBName,
+		&t.PoolID,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -96,7 +106,7 @@ func (r *TenantRepository) FindByID(ctx context.Context, id string) (*domain.Ten
 // FindBySlug busca un inquilino por su slug único
 func (r *TenantRepository) FindBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
 	query := `
-		SELECT id, name, slug, owner_user_id, status, db_name, created_at, updated_at
+		SELECT id, name, slug, owner_user_id, status, db_name, COALESCE(pool_id::text, ''), created_at, updated_at
 		FROM tenants
 		WHERE slug = $1
 	`
@@ -108,6 +118,7 @@ func (r *TenantRepository) FindBySlug(ctx context.Context, slug string) (*domain
 		&t.OwnerUserID,
 		&t.Status,
 		&t.DBName,
+		&t.PoolID,
 		&t.CreatedAt,
 		&t.UpdatedAt,
 	)
@@ -123,7 +134,7 @@ func (r *TenantRepository) FindBySlug(ctx context.Context, slug string) (*domain
 // FindByOwnerUserID retorna todos los inquilinos pertenecientes a un usuario
 func (r *TenantRepository) FindByOwnerUserID(ctx context.Context, ownerUserID string) ([]domain.Tenant, error) {
 	query := `
-		SELECT id, name, slug, owner_user_id, status, db_name, created_at, updated_at
+		SELECT id, name, slug, owner_user_id, status, db_name, COALESCE(pool_id::text, ''), created_at, updated_at
 		FROM tenants
 		WHERE owner_user_id = $1
 		ORDER BY created_at DESC
@@ -146,6 +157,7 @@ func (r *TenantRepository) FindByOwnerUserID(ctx context.Context, ownerUserID st
 			&t.OwnerUserID,
 			&t.Status,
 			&t.DBName,
+			&t.PoolID,
 			&t.CreatedAt,
 			&t.UpdatedAt,
 		); err != nil {

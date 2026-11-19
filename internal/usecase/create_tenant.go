@@ -28,6 +28,7 @@ type CreateTenantOutput struct {
 	OwnerUserID string
 	Status      string
 	DBName      string
+	PoolID      string
 	Database    *ports.TenantDBCredentials
 	CreatedAt   time.Time
 }
@@ -91,6 +92,8 @@ func (uc *CreateTenantUseCase) Execute(ctx context.Context, input CreateTenantIn
 		return nil, fmt.Errorf("fallo al aprovisionar base de datos para el inquilino: %w", err)
 	}
 
+	tenant.PoolID = creds.PoolID
+
 	// 4. Persistir metadatos del tenant en la base de datos principal
 	if err := uc.tenantRepo.Save(ctx, tenant); err != nil {
 		return nil, fmt.Errorf("fallo al guardar metadatos del inquilino: %w", err)
@@ -103,6 +106,7 @@ func (uc *CreateTenantUseCase) Execute(ctx context.Context, input CreateTenantIn
 		OwnerUserID: tenant.OwnerUserID,
 		Status:      tenant.Status,
 		DBName:      tenant.DBName,
+		PoolID:      tenant.PoolID,
 		Database:    creds,
 		CreatedAt:   tenant.CreatedAt,
 	}, nil

@@ -13,6 +13,7 @@ type TenantDBCredentials struct {
 	Username         string `json:"user"`
 	Password         string `json:"password"`
 	ConnectionString string `json:"connection_string"`
+	PoolID           string `json:"pool_id,omitempty"`
 }
 
 // BuildConnectionString construye la URI formal de conexión a PostgreSQL

@@ -38,6 +38,7 @@ import (
 	"pleyades-app/internal/adapters/http/middleware"
 	"pleyades-app/internal/adapters/postgres"
 	"pleyades-app/internal/config"
+	"pleyades-app/internal/domain"
 	"pleyades-app/internal/usecase"
 )
 
@@ -67,21 +68,45 @@ func main() {
 	idempotency := middleware.NewIdempotencyMiddleware(10 * time.Minute)
 
 	userRepo := postgres.NewUserRepository(db)
+	poolRepo := postgres.NewDatabasePoolRepository(db)
 	tenantRepo := postgres.NewTenantRepository(db)
-
-	// Inicializar esquema de tenants de forma defensiva
-	initCtx, initCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	if err := tenantRepo.InitSchema(initCtx); err != nil {
-		initCancel()
-		log.Fatalf("error fatal al inicializar esquema de tenants: %v", err)
-	}
-	initCancel()
 
 	dbPort, _ := strconv.Atoi(cfg.DB.Port)
 	if dbPort == 0 {
 		dbPort = 5432
 	}
-	tenantProvisioner := postgres.NewLocalPostgresTenantProvisioner(db, cfg.DB.Host, dbPort)
+
+	// Inicializar esquemas e inventario de pools de forma defensiva
+	initCtx, initCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := userRepo.InitSchema(initCtx); err != nil {
+		initCancel()
+		log.Fatalf("error fatal al inicializar esquema de usuarios: %v", err)
+	}
+	if err := poolRepo.InitSchema(initCtx); err != nil {
+		initCancel()
+		log.Fatalf("error fatal al inicializar esquema de pools: %v", err)
+	}
+	if err := tenantRepo.InitSchema(initCtx); err != nil {
+		initCancel()
+		log.Fatalf("error fatal al inicializar esquema de tenants: %v", err)
+	}
+
+	defaultPool := domain.DatabasePool{
+		Name:          "psql-pleyades-base",
+		Host:          cfg.DB.Host,
+		Port:          dbPort,
+		AdminUser:     cfg.DB.User,
+		AdminPassword: cfg.DB.Password,
+		MaxTenants:    domain.DefaultMaxTenantsPerPool,
+		Status:        domain.PoolStatusActive,
+	}
+	if err := poolRepo.EnsureDefaultPool(initCtx, defaultPool); err != nil {
+		initCancel()
+		log.Fatalf("error fatal al inicializar pool base en el catálogo: %v", err)
+	}
+	initCancel()
+
+	tenantProvisioner := postgres.NewShardedPostgresTenantProvisioner(db, cfg.DB.Host, dbPort, poolRepo, tenantRepo, cfg.DB.SSLMode)
 
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
 	loginUseCase := usecase.NewLoginUserUseCase(userRepo, hasher, tokenService, 15*time.Minute)

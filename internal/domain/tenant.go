@@ -21,6 +21,7 @@ type Tenant struct {
 	OwnerUserID string
 	Status      string
 	DBName      string
+	PoolID      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }

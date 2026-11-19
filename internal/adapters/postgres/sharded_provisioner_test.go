@@ -10,16 +10,16 @@ import (
 )
 
 type mockDatabasePoolRepository struct {
-	availablePool        *domain.DatabasePool
-	getAvailablePoolErr  error
-	findByIDPool         *domain.DatabasePool
-	findByIDErr          error
-	saveErr              error
-	incrementCalls       int
-	incrementErr         error
-	incrementedPoolID    string
-	listAllPools         []domain.DatabasePool
-	listAllErr           error
+	availablePool       *domain.DatabasePool
+	getAvailablePoolErr error
+	findByIDPool        *domain.DatabasePool
+	findByIDErr         error
+	saveErr             error
+	incrementCalls      int
+	incrementErr        error
+	incrementedPoolID   string
+	listAllPools        []domain.DatabasePool
+	listAllErr          error
 }
 
 func (m *mockDatabasePoolRepository) GetAvailablePool(ctx context.Context) (*domain.DatabasePool, error) {
@@ -54,7 +54,7 @@ func (m *mockDatabasePoolRepository) ListAll(ctx context.Context) ([]domain.Data
 }
 
 type mockTenantRepoForProvisioner struct {
-	tenantBySlug *domain.Tenant
+	tenantBySlug  *domain.Tenant
 	findBySlugErr error
 }
 

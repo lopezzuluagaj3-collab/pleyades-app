@@ -29,12 +29,12 @@ type K8sPoolScaleTrigger struct {
 func NewK8sPoolScaleTrigger(enabled bool) *K8sPoolScaleTrigger {
 	t := &K8sPoolScaleTrigger{
 		k8sHost:   "https://kubernetes.default.svc",
-		tokenPath: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+		tokenPath: "/var/run/secrets/kubernetes.io/serviceaccount/token", // #nosec G101 - Safe static path to projected service account token
 		enabled:   enabled,
 	}
 
 	caCertPath := "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-	caCert, err := os.ReadFile(caCertPath)
+	caCert, err := os.ReadFile(caCertPath) // #nosec G304 - Fixed trusted path for in-cluster CA
 	if err == nil {
 		caCertPool := x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
@@ -60,7 +60,7 @@ func (t *K8sPoolScaleTrigger) TriggerWarmPool(ctx context.Context, serverName st
 		return nil
 	}
 
-	tokenBytes, err := os.ReadFile(t.tokenPath)
+	tokenBytes, err := os.ReadFile(t.tokenPath) // #nosec G304 - Trusted in-cluster service account path
 	if err != nil {
 		return fmt.Errorf("k8s trigger: no se pudo leer el token del ServiceAccount: %w", err)
 	}
@@ -122,7 +122,9 @@ func (t *K8sPoolScaleTrigger) TriggerWarmPool(ctx context.Context, serverName st
 	if err != nil {
 		return fmt.Errorf("k8s trigger: error de comunicación con Kubernetes API: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusConflict {
 		return nil

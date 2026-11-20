@@ -11,7 +11,8 @@ const (
 	PoolStatusFull        = "FULL"
 	PoolStatusMaintenance = "MAINTENANCE"
 
-	DefaultMaxTenantsPerPool = 7
+	DefaultMaxTenantsPerPool  = 7
+	PoolScaleThresholdTenants = 5 // Umbral de advertencia para aprovisionar servidor en caliente
 )
 
 // DatabasePool representa un servidor gestionado de Azure Database for PostgreSQL Flexible Server
@@ -32,6 +33,11 @@ type DatabasePool struct {
 // CanAcceptTenant valida si el pool tiene capacidad disponible para albergar otro inquilino
 func (p DatabasePool) CanAcceptTenant() bool {
 	return p.Status == PoolStatusActive && p.CurrentTenants < p.MaxTenants
+}
+
+// ShouldTriggerScaleOut evalúa si el pool alcanzó el umbral para disparar el siguiente servidor
+func (p DatabasePool) ShouldTriggerScaleOut() bool {
+	return p.Status == PoolStatusActive && p.CurrentTenants >= PoolScaleThresholdTenants
 }
 
 // Validate valida las invariantes del pool de base de datos

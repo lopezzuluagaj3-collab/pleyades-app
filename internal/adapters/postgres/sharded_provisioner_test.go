@@ -80,11 +80,22 @@ func (m *mockTenantRepoForProvisioner) FindByOwnerUserID(ctx context.Context, ow
 	return nil, nil
 }
 
+type mockPoolScaleTrigger struct {
+	triggeredServers []string
+	triggerErr       error
+}
+
+func (m *mockPoolScaleTrigger) TriggerWarmPool(ctx context.Context, serverName string) error {
+	m.triggeredServers = append(m.triggeredServers, serverName)
+	return m.triggerErr
+}
+
 func TestShardedProvisionerValidation(t *testing.T) {
 	poolRepo := &mockDatabasePoolRepository{}
 	tenantRepo := &mockTenantRepoForProvisioner{}
+	scaleTrigger := &mockPoolScaleTrigger{}
 
-	prov := NewShardedPostgresTenantProvisioner(nil, "localhost", 5432, poolRepo, tenantRepo, "disable")
+	prov := NewShardedPostgresTenantProvisioner(nil, "localhost", 5432, poolRepo, tenantRepo, scaleTrigger, "disable")
 
 	t.Run("Rejects invalid slug before querying pool", func(t *testing.T) {
 		_, err := prov.Provision(context.Background(), "-invalid-slug")
@@ -148,6 +159,23 @@ func TestDatabasePoolCapacityRules(t *testing.T) {
 		}
 		if pool.Status != domain.PoolStatusFull {
 			t.Errorf("expected status FULL, got %s", pool.Status)
+		}
+	})
+
+	t.Run("Warm pool scale threshold: triggers scale out when reaching threshold 5 tenants", func(t *testing.T) {
+		pool := domain.DatabasePool{
+			Status:         domain.PoolStatusActive,
+			CurrentTenants: 4,
+			MaxTenants:     7,
+		}
+
+		if pool.ShouldTriggerScaleOut() {
+			t.Errorf("pool with 4 tenants should not trigger scale out yet")
+		}
+
+		pool.CurrentTenants = 5
+		if !pool.ShouldTriggerScaleOut() {
+			t.Errorf("pool with 5 tenants must trigger scale out")
 		}
 	})
 }

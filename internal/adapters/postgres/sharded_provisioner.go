@@ -14,12 +14,13 @@ var _ ports.TenantProvisioner = (*ShardedPostgresTenantProvisioner)(nil)
 
 // ShardedPostgresTenantProvisioner gestiona el aprovisionamiento de bases de datos distribuidas en pools de Azure Flexible Server
 type ShardedPostgresTenantProvisioner struct {
-	primaryDB   *sql.DB
-	primaryHost string
-	primaryPort int
-	poolRepo    ports.DatabasePoolRepository
-	tenantRepo  ports.TenantRepository
-	sslMode     string
+	primaryDB    *sql.DB
+	primaryHost  string
+	primaryPort  int
+	poolRepo     ports.DatabasePoolRepository
+	tenantRepo   ports.TenantRepository
+	scaleTrigger ports.PoolScaleTrigger
+	sslMode      string
 }
 
 // NewShardedPostgresTenantProvisioner crea una instancia del aprovisionador sharded con balanceo por capacidad
@@ -29,18 +30,20 @@ func NewShardedPostgresTenantProvisioner(
 	primaryPort int,
 	poolRepo ports.DatabasePoolRepository,
 	tenantRepo ports.TenantRepository,
+	scaleTrigger ports.PoolScaleTrigger,
 	sslMode string,
 ) *ShardedPostgresTenantProvisioner {
 	if sslMode == "" {
 		sslMode = "require"
 	}
 	return &ShardedPostgresTenantProvisioner{
-		primaryDB:   primaryDB,
-		primaryHost: primaryHost,
-		primaryPort: primaryPort,
-		poolRepo:    poolRepo,
-		tenantRepo:  tenantRepo,
-		sslMode:     sslMode,
+		primaryDB:    primaryDB,
+		primaryHost:  primaryHost,
+		primaryPort:  primaryPort,
+		poolRepo:     poolRepo,
+		tenantRepo:   tenantRepo,
+		scaleTrigger: scaleTrigger,
+		sslMode:      sslMode,
 	}
 }
 
@@ -137,6 +140,12 @@ func (p *ShardedPostgresTenantProvisioner) Provision(ctx context.Context, slug s
 	// 6. Incrementar contador en el catálogo del pool (auto-marca FULL si alcanza max_tenants)
 	if err := p.poolRepo.IncrementTenantCount(ctx, pool.ID); err != nil {
 		return nil, fmt.Errorf("sharded provisioner: error al actualizar contador de inquilinos en pool '%s': %w", pool.Name, err)
+	}
+
+	// 7. Evaluar umbral de advertencia para disparar el aprovisionamiento de servidor en caliente (Warm Pool)
+	if p.scaleTrigger != nil && pool.CurrentTenants+1 >= domain.PoolScaleThresholdTenants {
+		nextPoolName := "psql-pleyades-dev-02"
+		_ = p.scaleTrigger.TriggerWarmPool(ctx, nextPoolName)
 	}
 
 	creds := &ports.TenantDBCredentials{

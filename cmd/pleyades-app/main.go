@@ -36,6 +36,7 @@ import (
 	"pleyades-app/internal/adapters/crypto"
 	"pleyades-app/internal/adapters/http"
 	"pleyades-app/internal/adapters/http/middleware"
+	"pleyades-app/internal/adapters/kubernetes"
 	"pleyades-app/internal/adapters/postgres"
 	"pleyades-app/internal/config"
 	"pleyades-app/internal/domain"
@@ -106,7 +107,8 @@ func main() {
 	}
 	initCancel()
 
-	tenantProvisioner := postgres.NewShardedPostgresTenantProvisioner(db, cfg.DB.Host, dbPort, poolRepo, tenantRepo, cfg.DB.SSLMode)
+	scaleTrigger := kubernetes.NewK8sPoolScaleTrigger(true)
+	tenantProvisioner := postgres.NewShardedPostgresTenantProvisioner(db, cfg.DB.Host, dbPort, poolRepo, tenantRepo, scaleTrigger, cfg.DB.SSLMode)
 
 	userUseCase := usecase.NewRegisterUserUseCase(userRepo, hasher)
 	loginUseCase := usecase.NewLoginUserUseCase(userRepo, hasher, tokenService, 15*time.Minute)

@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/rand"
 	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
@@ -17,8 +18,10 @@ func NewBcryptHasher(cost int) *BcryptHasher {
 	if cost < bcrypt.MinCost || cost > bcrypt.MaxCost {
 		cost = bcrypt.DefaultCost
 	}
-	// Se genera un hash sintético dinámicamente en tiempo de inicio para mitigar timing attacks sin almacenar credenciales estáticas
-	dummyHash, _ := bcrypt.GenerateFromPassword([]byte("pleyades_synthetic_timing_baseline"), cost)
+	// Se genera entropía aleatoria en tiempo de inicio para el hash sintético, eliminando cualquier secreto estático en el código
+	syntheticSecret := make([]byte, 16)
+	_, _ = rand.Read(syntheticSecret)
+	dummyHash, _ := bcrypt.GenerateFromPassword(syntheticSecret, cost)
 	return &BcryptHasher{
 		cost:      cost,
 		dummyHash: dummyHash,

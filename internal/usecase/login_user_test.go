@@ -128,6 +128,9 @@ func testLoginUserNotFound(t *testing.T) {
 	if !errors.Is(err, domain.ErrInvalidCredentials) {
 		t.Fatalf("expected ErrInvalidCredentials for unknown user, got %v", err)
 	}
+	if !hasher.compareDummyCalled {
+		t.Fatalf("expected CompareDummy to be executed to mitigate timing attack, but it was not invoked")
+	}
 }
 
 func testLoginPasswordMismatch(t *testing.T) {

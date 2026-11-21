@@ -55,7 +55,9 @@ func (uc *LoginUserUseCase) Execute(ctx context.Context, input LoginUserInput) (
 
 	user, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil || user == nil {
-		// Mitigación OWASP: Mensaje genérico para evitar enumeración de usuarios registrados
+		// Mitigación de Timing Attacks (OWASP): Ejecutamos una comparación de coste equivalente
+		// a través del puerto PasswordHasher para igualar el tiempo de cómputo (~70ms) al de un usuario existente.
+		_ = uc.hasher.CompareDummy(password)
 		return nil, domain.ErrInvalidCredentials
 	}
 

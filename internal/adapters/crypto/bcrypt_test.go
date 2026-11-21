@@ -12,6 +12,7 @@ func TestBcryptHasherSuite(t *testing.T) {
 	t.Run("Hash and Compare Success", testBcryptHashAndCompareSuccess)
 	t.Run("Compare Mismatch Failure", testBcryptCompareMismatch)
 	t.Run("Custom Cost Boundary", testBcryptCustomCost)
+	t.Run("CompareDummy Execution", testBcryptCompareDummy)
 }
 
 func testBcryptHashAndCompareSuccess(t *testing.T) {
@@ -41,5 +42,13 @@ func testBcryptCustomCost(t *testing.T) {
 	hasher := crypto.NewBcryptHasher(1)
 	if hasher == nil {
 		t.Fatalf("expected hasher instance, got nil")
+	}
+}
+
+func testBcryptCompareDummy(t *testing.T) {
+	hasher := crypto.NewBcryptHasher(bcrypt.DefaultCost)
+	// CompareDummy siempre debe ejecutar la comparación y arrojar error contra contraseñas arbitrarias
+	if err := hasher.CompareDummy("AnyPassword123!"); err == nil {
+		t.Errorf("expected dummy compare to fail against synthetic hash, got nil")
 	}
 }

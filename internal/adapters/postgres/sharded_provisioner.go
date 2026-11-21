@@ -169,10 +169,14 @@ func (p *ShardedPostgresTenantProvisioner) ensureUser(ctx context.Context, targe
 	}
 
 	if !userExists {
-		escapedPass := strings.ReplaceAll(password, "'", "''")
-		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
+		createUserStmt := BuildCreateUserDDL(username, password, DefaultTenantConnectionLimit)
 		if _, err := targetDB.ExecContext(ctx, createUserStmt); err != nil { // NOSONAR: Identifiers and passwords are sanitized
 			return fmt.Errorf("sharded provisioner: error al crear usuario '%s' en pool '%s': %w", username, poolName, err)
+		}
+	} else {
+		alterRoleStmt := BuildAlterUserConnectionLimitDDL(username, DefaultTenantConnectionLimit)
+		if _, err := targetDB.ExecContext(ctx, alterRoleStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
+			return fmt.Errorf("sharded provisioner: error al actualizar límite de conexiones a '%s' en pool '%s': %w", username, poolName, err)
 		}
 	}
 	return nil
@@ -180,7 +184,7 @@ func (p *ShardedPostgresTenantProvisioner) ensureUser(ctx context.Context, targe
 
 // revokePublicConnect revoca el privilegio CONNECT a PUBLIC para garantizar aislamiento estricto
 func (p *ShardedPostgresTenantProvisioner) revokePublicConnect(ctx context.Context, targetDB *sql.DB, dbName, poolName string) error {
-	stmt := strings.Join([]string{`REVOKE CONNECT ON DATABASE "`, dbName, `" FROM PUBLIC`}, "")
+	stmt := BuildRevokePublicConnectDDL(dbName)
 	if _, err := targetDB.ExecContext(ctx, stmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 		return fmt.Errorf("sharded provisioner: error al revocar CONNECT a PUBLIC en '%s' (pool '%s'): %w", dbName, poolName, err)
 	}
@@ -189,7 +193,7 @@ func (p *ShardedPostgresTenantProvisioner) revokePublicConnect(ctx context.Conte
 
 // grantUserPrivileges asigna privilegios exclusivos sobre la base de datos al usuario del tenant
 func (p *ShardedPostgresTenantProvisioner) grantUserPrivileges(ctx context.Context, targetDB *sql.DB, dbName, username, poolName string) error {
-	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
+	grantStmt := BuildGrantPrivilegesDDL(dbName, username)
 	if _, err := targetDB.ExecContext(ctx, grantStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 		return fmt.Errorf("sharded provisioner: error al otorgar privilegios en pool '%s': %w", poolName, err)
 	}

@@ -99,6 +99,31 @@ func (p *LocalPostgresTenantProvisioner) ensureDatabase(ctx context.Context, dbN
 	return nil
 }
 
+// DefaultTenantConnectionLimit define el límite de conexiones concurrentes asignado al rol del inquilino
+// en PostgreSQL para evitar agotamiento del pool compartido (bin-packing de 5-7 tenants por servidor B1ms).
+const DefaultTenantConnectionLimit = 2
+
+// BuildCreateUserDDL construye la sentencia DDL para crear el rol de usuario de tenant con límite de conexiones.
+func BuildCreateUserDDL(username, password string, connectionLimit int) string {
+	escapedPass := strings.ReplaceAll(password, "'", "''")
+	return fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s' CONNECTION LIMIT %d`, username, escapedPass, connectionLimit)
+}
+
+// BuildAlterUserConnectionLimitDDL construye la sentencia DDL para fijar el límite de conexiones concurrentes.
+func BuildAlterUserConnectionLimitDDL(username string, connectionLimit int) string {
+	return fmt.Sprintf(`ALTER ROLE "%s" CONNECTION LIMIT %d`, username, connectionLimit)
+}
+
+// BuildRevokePublicConnectDDL construye la sentencia DDL para revocar el privilegio de conexión a PUBLIC.
+func BuildRevokePublicConnectDDL(dbName string) string {
+	return fmt.Sprintf(`REVOKE CONNECT ON DATABASE "%s" FROM PUBLIC`, dbName)
+}
+
+// BuildGrantPrivilegesDDL construye la sentencia DDL para otorgar todos los privilegios sobre la base de datos al rol de usuario.
+func BuildGrantPrivilegesDDL(dbName, username string) string {
+	return fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
+}
+
 // ensureUser crea el usuario administrador de la base de datos si no existe
 func (p *LocalPostgresTenantProvisioner) ensureUser(ctx context.Context, username, password string) error {
 	var userExists bool
@@ -108,10 +133,14 @@ func (p *LocalPostgresTenantProvisioner) ensureUser(ctx context.Context, usernam
 	}
 
 	if !userExists {
-		escapedPass := strings.ReplaceAll(password, "'", "''")
-		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
+		createUserStmt := BuildCreateUserDDL(username, password, DefaultTenantConnectionLimit)
 		if _, err := p.db.ExecContext(ctx, createUserStmt); err != nil { // NOSONAR: Identifiers and passwords are sanitized
 			return fmt.Errorf("postgres provisioner: error al crear usuario '%s': %w", username, err)
+		}
+	} else {
+		alterRoleStmt := BuildAlterUserConnectionLimitDDL(username, DefaultTenantConnectionLimit)
+		if _, err := p.db.ExecContext(ctx, alterRoleStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
+			return fmt.Errorf("postgres provisioner: error al actualizar límite de conexiones a '%s': %w", username, err)
 		}
 	}
 	return nil
@@ -119,7 +148,7 @@ func (p *LocalPostgresTenantProvisioner) ensureUser(ctx context.Context, usernam
 
 // revokePublicConnect revoca el privilegio CONNECT a PUBLIC para garantizar aislamiento estricto
 func (p *LocalPostgresTenantProvisioner) revokePublicConnect(ctx context.Context, dbName string) error {
-	stmt := strings.Join([]string{`REVOKE CONNECT ON DATABASE "`, dbName, `" FROM PUBLIC`}, "")
+	stmt := BuildRevokePublicConnectDDL(dbName)
 	if _, err := p.db.ExecContext(ctx, stmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 		return fmt.Errorf("postgres provisioner: error al revocar CONNECT a PUBLIC en '%s': %w", dbName, err)
 	}
@@ -128,7 +157,7 @@ func (p *LocalPostgresTenantProvisioner) revokePublicConnect(ctx context.Context
 
 // grantUserPrivileges asigna privilegios exclusivos sobre la base de datos al usuario del tenant
 func (p *LocalPostgresTenantProvisioner) grantUserPrivileges(ctx context.Context, dbName, username string) error {
-	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
+	grantStmt := BuildGrantPrivilegesDDL(dbName, username)
 	if _, err := p.db.ExecContext(ctx, grantStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 		return fmt.Errorf("postgres provisioner: error al otorgar privilegios a '%s' sobre '%s': %w", username, dbName, err)
 	}

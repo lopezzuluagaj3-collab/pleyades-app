@@ -121,3 +121,35 @@ func TestLocalPostgresTenantProvisioner_RejectsInvalidSlugBeforeDB(t *testing.T)
 		})
 	}
 }
+
+// TestTenantIsolationAndConnectionLimitDDL audita de forma automatizada en CI la construcción
+// de las sentencias DDL para aislamiento estricto (REVOKE CONNECT) y cuotas de conexión (CONNECTION LIMIT 2).
+func TestTenantIsolationAndConnectionLimitDDL(t *testing.T) {
+	// 1. Verificar construcción segura de REVOKE CONNECT
+	revokeDDL := postgres.BuildRevokePublicConnectDDL("tenant_acmecloud")
+	expectedRevoke := `REVOKE CONNECT ON DATABASE "tenant_acmecloud" FROM PUBLIC`
+	if revokeDDL != expectedRevoke {
+		t.Errorf("BuildRevokePublicConnectDDL() = %q, want %q", revokeDDL, expectedRevoke)
+	}
+
+	// 2. Verificar construcción de CREATE USER con CONNECTION LIMIT
+	createUserDDL := postgres.BuildCreateUserDDL("usr_acmecloud", "Secret'Pass#123", postgres.DefaultTenantConnectionLimit)
+	expectedCreate := `CREATE USER "usr_acmecloud" WITH ENCRYPTED PASSWORD 'Secret''Pass#123' CONNECTION LIMIT 2`
+	if createUserDDL != expectedCreate {
+		t.Errorf("BuildCreateUserDDL() = %q, want %q", createUserDDL, expectedCreate)
+	}
+
+	// 3. Verificar construcción de ALTER ROLE con CONNECTION LIMIT
+	alterRoleDDL := postgres.BuildAlterUserConnectionLimitDDL("usr_acmecloud", postgres.DefaultTenantConnectionLimit)
+	expectedAlter := `ALTER ROLE "usr_acmecloud" CONNECTION LIMIT 2`
+	if alterRoleDDL != expectedAlter {
+		t.Errorf("BuildAlterUserConnectionLimitDDL() = %q, want %q", alterRoleDDL, expectedAlter)
+	}
+
+	// 4. Verificar construcción de GRANT ALL PRIVILEGES
+	grantDDL := postgres.BuildGrantPrivilegesDDL("tenant_acmecloud", "usr_acmecloud")
+	expectedGrant := `GRANT ALL PRIVILEGES ON DATABASE "tenant_acmecloud" TO "usr_acmecloud"`
+	if grantDDL != expectedGrant {
+		t.Errorf("BuildGrantPrivilegesDDL() = %q, want %q", grantDDL, expectedGrant)
+	}
+}

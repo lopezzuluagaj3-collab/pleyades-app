@@ -8,12 +8,9 @@ import (
 	"pleyades-app/internal/adapters/postgres"
 )
 
-// TestLocalPostgresTenantProvisionerSlugValidation audita que los identificadores de slug
-// cumplan con las invariantes de longitud y caracteres, previniendo colisiones por truncamiento
-// a 63 bytes (NAMEDATALEN) en PostgreSQL.
-func TestLocalPostgresTenantProvisionerSlugValidation(t *testing.T) {
-	prov := postgres.NewLocalPostgresTenantProvisioner(nil, "localhost", 5432)
-
+// TestValidateSlug audita que los identificadores de slug cumplan con las invariantes de
+// longitud y caracteres, previniendo colisiones por truncamiento a 63 bytes (NAMEDATALEN) en PostgreSQL.
+func TestValidateSlug(t *testing.T) {
 	tests := []struct {
 		name    string
 		slug    string
@@ -82,17 +79,44 @@ func TestLocalPostgresTenantProvisionerSlugValidation(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run("Provision_"+tt.name, func(t *testing.T) {
-			_, err := prov.Provision(context.Background(), tt.slug)
+		t.Run(tt.name, func(t *testing.T) {
+			err := postgres.ValidateSlug(tt.slug)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Provision() error = %v, wantErr = %v", err, tt.wantErr)
+				t.Errorf("ValidateSlug(%q) error = %v, wantErr = %v", tt.slug, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestLocalPostgresTenantProvisioner_RejectsInvalidSlugBeforeDB verifies that invalid slugs
+// fail fast at the validation boundary without attempting database access.
+func TestLocalPostgresTenantProvisioner_RejectsInvalidSlugBeforeDB(t *testing.T) {
+	prov := postgres.NewLocalPostgresTenantProvisioner(nil, "localhost", 5432)
+
+	invalidSlugs := []string{
+		"",
+		"a",
+		"ab",
+		"AcmeCorp",
+		"-leading-hyphen",
+		"trailing-hyphen-",
+		strings.Repeat("a", 31),
+		strings.Repeat("a", 64),
+		`injection'; DROP TABLE tenants;--`,
+	}
+
+	for _, slug := range invalidSlugs {
+		t.Run("Provision_"+slug, func(t *testing.T) {
+			_, err := prov.Provision(context.Background(), slug)
+			if err == nil {
+				t.Errorf("expected error for slug %q, got nil", slug)
 			}
 		})
 
-		t.Run("ResetPassword_"+tt.name, func(t *testing.T) {
-			_, err := prov.ResetPassword(context.Background(), tt.slug)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ResetPassword() error = %v, wantErr = %v", err, tt.wantErr)
+		t.Run("ResetPassword_"+slug, func(t *testing.T) {
+			_, err := prov.ResetPassword(context.Background(), slug)
+			if err == nil {
+				t.Errorf("expected error for slug %q, got nil", slug)
 			}
 		})
 	}

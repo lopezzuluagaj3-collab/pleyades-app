@@ -131,7 +131,12 @@ func (p *ShardedPostgresTenantProvisioner) Provision(ctx context.Context, slug s
 		}
 	}
 
-	// 5. Asignar privilegios exclusivos
+	// 5. Aislar base de datos revocando CONNECT a PUBLIC y otorgar privilegios exclusivos al usuario del tenant
+	revokeStmt := fmt.Sprintf(`REVOKE CONNECT ON DATABASE "%s" FROM PUBLIC`, dbName)
+	if _, err := targetDB.ExecContext(ctx, revokeStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
+		return nil, fmt.Errorf("sharded provisioner: error al revocar CONNECT a PUBLIC en '%s': %w", dbName, err)
+	}
+
 	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
 	if _, err := targetDB.ExecContext(ctx, grantStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
 		return nil, fmt.Errorf("sharded provisioner: error al otorgar privilegios en pool '%s': %w", pool.Name, err)

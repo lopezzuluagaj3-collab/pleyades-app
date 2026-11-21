@@ -36,12 +36,14 @@ func NewConnection(cfg DBConfig) (*sql.DB, error) {
 	}
 
 	// Dimensionamiento defensivo del Pool frente al HPA en Kubernetes:
-	// En Azure Database for PostgreSQL Flexible Server (SKU Standard_B1ms), max_connections = 50 (~47 disponibles).
-	// Fijar 5 conexiones por pod garantiza que hasta 7 pods en rolling update consuman un máximo de 35 conexiones,
-	// dejando un margen de seguridad > 12 conexiones para mantenimiento, administradores y procesos del sistema.
+	// En Azure Database for PostgreSQL Flexible Server (SKU Standard_B1ms):
+	// max_connections = 50, superuser_reserved_connections = 10, reserved_connections = 5.
+	// Capacidad neta utilizable para aplicaciones = 35 conexiones.
+	// Fijar 4 conexiones por pod garantiza que hasta 7 pods en rolling update consuman un máximo de 28 conexiones,
+	// preservando un margen de seguridad garantizado de 7 conexiones libres (20%) para administradores y telemetría.
 	maxOpen := cfg.MaxOpenConns
 	if maxOpen <= 0 {
-		maxOpen = 5
+		maxOpen = 4
 	}
 	maxIdle := cfg.MaxIdleConns
 	if maxIdle <= 0 {

@@ -104,6 +104,21 @@ func TestShardedProvisionerValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("Rejects slug shorter than 3 chars", func(t *testing.T) {
+		_, err := prov.Provision(context.Background(), "ab")
+		if err == nil {
+			t.Errorf("expected error for short slug 'ab', got nil")
+		}
+	})
+
+	t.Run("Rejects slug longer than 30 chars preventing PostgreSQL truncation collision", func(t *testing.T) {
+		longSlug := "a" + strings.Repeat("b", 29) + "c"
+		_, err := prov.Provision(context.Background(), longSlug)
+		if err == nil {
+			t.Errorf("expected error for long slug '%s', got nil", longSlug)
+		}
+	})
+
 	t.Run("Returns ErrNoAvailablePool when no pools have capacity", func(t *testing.T) {
 		poolRepo.getAvailablePoolErr = domain.ErrNoAvailablePool
 		_, err := prov.Provision(context.Background(), "valid-slug")

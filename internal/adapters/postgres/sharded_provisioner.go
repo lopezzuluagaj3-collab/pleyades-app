@@ -77,7 +77,7 @@ func (p *ShardedPostgresTenantProvisioner) getConnectionForPool(ctx context.Cont
 
 // Provision aprovisiona la base de datos y usuario en el pool de Azure Flexible Server con capacidad disponible
 func (p *ShardedPostgresTenantProvisioner) Provision(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
-	if !validSlugIdentifier.MatchString(slug) {
+	if len(slug) < 3 || len(slug) > 30 || !validSlugIdentifier.MatchString(slug) {
 		return nil, fmt.Errorf("sharded provisioner: slug inválido '%s'", slug)
 	}
 
@@ -198,7 +198,7 @@ func (p *ShardedPostgresTenantProvisioner) grantUserPrivileges(ctx context.Conte
 
 // ResetPassword rota la contraseña del usuario en el pool donde reside el tenant
 func (p *ShardedPostgresTenantProvisioner) ResetPassword(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
-	if !validSlugIdentifier.MatchString(slug) {
+	if len(slug) < 3 || len(slug) > 30 || !validSlugIdentifier.MatchString(slug) {
 		return nil, fmt.Errorf("sharded provisioner: slug inválido '%s'", slug)
 	}
 

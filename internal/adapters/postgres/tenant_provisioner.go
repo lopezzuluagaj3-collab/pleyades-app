@@ -12,7 +12,7 @@ import (
 	"pleyades-app/internal/ports"
 )
 
-var validSlugIdentifier = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
+var validSlugIdentifier = regexp.MustCompile(`^[a-z][a-z0-9-]{1,28}[a-z0-9]$`)
 
 // LocalPostgresTenantProvisioner aprovisiona bases de datos lógicas aisladas y usuarios dedicados en la instancia local de PostgreSQL
 type LocalPostgresTenantProvisioner struct {
@@ -32,7 +32,7 @@ func NewLocalPostgresTenantProvisioner(db *sql.DB, host string, port int) *Local
 
 // Provision crea la base de datos aislada y un usuario con permisos exclusivos
 func (p *LocalPostgresTenantProvisioner) Provision(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
-	if !validSlugIdentifier.MatchString(slug) {
+	if len(slug) < 3 || len(slug) > 30 || !validSlugIdentifier.MatchString(slug) {
 		return nil, fmt.Errorf("postgres provisioner: slug inválido '%s'", slug)
 	}
 
@@ -127,7 +127,7 @@ func (p *LocalPostgresTenantProvisioner) grantUserPrivileges(ctx context.Context
 
 // ResetPassword rota la contraseña del usuario de base de datos en PostgreSQL
 func (p *LocalPostgresTenantProvisioner) ResetPassword(ctx context.Context, slug string) (*ports.TenantDBCredentials, error) {
-	if !validSlugIdentifier.MatchString(slug) {
+	if len(slug) < 3 || len(slug) > 30 || !validSlugIdentifier.MatchString(slug) {
 		return nil, fmt.Errorf("postgres provisioner: slug inválido '%s'", slug)
 	}
 

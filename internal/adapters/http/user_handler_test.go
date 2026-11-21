@@ -54,6 +54,10 @@ func (m *mockHasherForHTTP) Compare(hashedPassword, password string) error {
 	return nil
 }
 
+func (m *mockHasherForHTTP) CompareDummy(password string) error {
+	return nil
+}
+
 // TestUserHandlerSuite orquesta las pruebas atómicas del handler HTTP de usuarios
 func TestUserHandlerSuite(t *testing.T) {
 	t.Run("Register Success", testRegisterSuccess)

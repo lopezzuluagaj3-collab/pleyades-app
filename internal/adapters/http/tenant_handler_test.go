@@ -112,7 +112,7 @@ func setupTestTenantHandler(repo *mockTenantRepoForHTTP, prov *mockTenantProvisi
 	)
 }
 
-func executePostRequest(handlerFunc http.HandlerFunc, path string, body string, userID string, pathID string) *httptest.ResponseRecorder {
+func executePostRequest(handlerFunc http.HandlerFunc, path, body, userID, pathID string) *httptest.ResponseRecorder {
 	var bodyBuf *bytes.Buffer
 	if body != "" {
 		bodyBuf = bytes.NewBufferString(body)

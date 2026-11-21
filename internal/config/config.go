@@ -58,12 +58,12 @@ func loadEnvFile() {
 func Load() (Config, error) {
 	loadEnvFile()
 
-	SERVER_PORT, err := getRequiredEnv("SERVER_PORT")
+	serverPort, err := getRequiredEnv("SERVER_PORT")
 	if err != nil {
 		return Config{}, err
 	}
 
-	DB_PORT, err := getRequiredEnv("DB_PORT")
+	dbPort, err := getRequiredEnv("DB_PORT")
 	if err != nil {
 		return Config{}, err
 	}
@@ -103,11 +103,11 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		ServerPort: SERVER_PORT,
+		ServerPort: serverPort,
 		JWTSecret:  jwtSecret,
 		DB: postgres.DBConfig{
 			Host:         host,
-			Port:         DB_PORT,
+			Port:         dbPort,
 			User:         user,
 			Password:     pass,
 			DBName:       name,

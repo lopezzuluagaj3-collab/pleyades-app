@@ -21,6 +21,9 @@ type LoginUserOutput struct {
 	User        *domain.User `json:"-"`
 }
 
+// dummyBcryptHash es un hash precomputado válido (cost=10) para mitigar timing attacks cuando el usuario no existe
+const dummyBcryptHash = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+
 // LoginUserUseCase coordina la autenticación del usuario y la emisión del token JWT
 type LoginUserUseCase struct {
 	userRepo     ports.UserRepository
@@ -55,7 +58,9 @@ func (uc *LoginUserUseCase) Execute(ctx context.Context, input LoginUserInput) (
 
 	user, err := uc.userRepo.FindByEmail(ctx, email)
 	if err != nil || user == nil {
-		// Mitigación OWASP: Mensaje genérico para evitar enumeración de usuarios registrados
+		// Mitigación de Timing Attacks (OWASP): Ejecutamos una comparación contra un hash sintético
+		// para igualar el tiempo de cómputo (~70ms de Bcrypt) al de un usuario existente con password inválido.
+		_ = uc.hasher.Compare(dummyBcryptHash, password)
 		return nil, domain.ErrInvalidCredentials
 	}
 

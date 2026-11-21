@@ -39,11 +39,12 @@ func NewConnection(cfg DBConfig) (*sql.DB, error) {
 	// En Azure Database for PostgreSQL Flexible Server (SKU Standard_B1ms):
 	// max_connections = 50, superuser_reserved_connections = 10, reserved_connections = 5.
 	// Capacidad neta utilizable para aplicaciones = 35 conexiones.
-	// Fijar 4 conexiones por pod garantiza que hasta 7 pods en rolling update consuman un máximo de 28 conexiones,
-	// preservando un margen de seguridad garantizado de 7 conexiones libres (20%) para administradores y telemetría.
+	// Fijar 3 conexiones por pod garantiza que en pico de HPA (5 pods × 3 = 15) o RollingUpdate con surge (6 pods × 3 = 18),
+	// sumado al tope de hasta 7 tenants (7 × 2 = 14), se consuma un máximo de 32 conexiones sobre 35,
+	// preservando un margen estricto garantizado de 3 a 12 slots libres (8.5% a 34%) sin desbordamiento.
 	maxOpen := cfg.MaxOpenConns
 	if maxOpen <= 0 {
-		maxOpen = 4
+		maxOpen = 3
 	}
 	maxIdle := cfg.MaxIdleConns
 	if maxIdle <= 0 {

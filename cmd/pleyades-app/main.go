@@ -32,7 +32,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/crypto/bcrypt"
-	_ "pleyades-app/docs"
+	_ "pleyades-app/docs" // Register Swagger OpenAPI documentation
 	"pleyades-app/internal/adapters/crypto"
 	"pleyades-app/internal/adapters/http"
 	"pleyades-app/internal/adapters/http/middleware"

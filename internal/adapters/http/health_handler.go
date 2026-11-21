@@ -19,7 +19,7 @@ func ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 
-	if _, err := w.Write([]byte(`{"status":"up"}`)); err != nil {
+	if _, err := w.Write([]byte(`{"status":"ready"}`)); err != nil {
 		return
 	}
 }

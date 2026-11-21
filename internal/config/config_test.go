@@ -33,7 +33,7 @@ func testConfigSuccess(t *testing.T) {
 	_ = os.Setenv("DB_HOST", "localhost")
 	_ = os.Setenv("DB_USER", "pleyades")
 	_ = os.Setenv("DB_PASSWORD", "secret")
-	_ = os.Setenv("DB_NAME", "pleyades_main")
+	_ = os.Setenv("DB_NAME", "pleyades_db")
 	_ = os.Setenv("DB_SSLMODE", "disable")
 
 	cfg, err := config.Load()
@@ -50,11 +50,11 @@ func testConfigSuccess(t *testing.T) {
 	if cfg.JWTSecret == "" {
 		t.Errorf("expected non-empty default JWTSecret")
 	}
-	if cfg.DB.MaxOpenConns != 4 {
-		t.Errorf("expected default DB.MaxOpenConns 4, got %d", cfg.DB.MaxOpenConns)
+	if cfg.DB.MaxOpenConns != 3 {
+		t.Errorf("expected default DB.MaxOpenConns 3, got %d", cfg.DB.MaxOpenConns)
 	}
-	if cfg.DB.MaxIdleConns != 4 {
-		t.Errorf("expected default DB.MaxIdleConns 4, got %d", cfg.DB.MaxIdleConns)
+	if cfg.DB.MaxIdleConns != 3 {
+		t.Errorf("expected default DB.MaxIdleConns 3, got %d", cfg.DB.MaxIdleConns)
 	}
 
 	// Test custom pool parameters

@@ -90,13 +90,13 @@ func Load() (Config, error) {
 
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-pleyades-enterprise-key-for-local-dev-123456789")
 
-	maxOpenStr := getEnv("DB_MAX_OPEN_CONNS", "4")
+	maxOpenStr := getEnv("DB_MAX_OPEN_CONNS", "3")
 	maxOpen, err := strconv.Atoi(maxOpenStr)
 	if err != nil || maxOpen <= 0 {
-		maxOpen = 4
+		maxOpen = 3
 	}
 
-	maxIdleStr := getEnv("DB_MAX_IDLE_CONNS", "4")
+	maxIdleStr := getEnv("DB_MAX_IDLE_CONNS", "3")
 	maxIdle, err := strconv.Atoi(maxIdleStr)
 	if err != nil || maxIdle <= 0 {
 		maxIdle = maxOpen

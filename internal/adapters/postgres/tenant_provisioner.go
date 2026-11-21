@@ -44,44 +44,20 @@ func (p *LocalPostgresTenantProvisioner) Provision(ctx context.Context, slug str
 		return nil, fmt.Errorf("postgres provisioner: fallo al generar credenciales seguras: %w", err)
 	}
 
-	// 1. Crear base de datos si no existe
-	var dbExists bool
-	checkDBQuery := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
-	if err := p.db.QueryRowContext(ctx, checkDBQuery, dbName).Scan(&dbExists); err != nil {
-		return nil, fmt.Errorf("postgres provisioner: error al consultar existencia de bd: %w", err)
+	if err := p.ensureDatabase(ctx, dbName); err != nil {
+		return nil, err
 	}
 
-	if !dbExists {
-		createDBStmt := fmt.Sprintf(`CREATE DATABASE "%s"`, dbName)
-		if _, err := p.db.ExecContext(ctx, createDBStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
-			return nil, fmt.Errorf("postgres provisioner: error al crear base de datos '%s': %w", dbName, err)
-		}
+	if err := p.ensureUser(ctx, username, password); err != nil {
+		return nil, err
 	}
 
-	// 2. Crear usuario con contraseña cifrada si no existe
-	var userExists bool
-	checkUserQuery := "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)"
-	if err := p.db.QueryRowContext(ctx, checkUserQuery, username).Scan(&userExists); err != nil {
-		return nil, fmt.Errorf("postgres provisioner: error al consultar existencia de usuario: %w", err)
+	if err := p.revokePublicConnect(ctx, dbName); err != nil {
+		return nil, err
 	}
 
-	if !userExists {
-		escapedPass := strings.ReplaceAll(password, "'", "''")
-		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
-		if _, err := p.db.ExecContext(ctx, createUserStmt); err != nil { // NOSONAR: Identifiers and passwords are sanitized
-			return nil, fmt.Errorf("postgres provisioner: error al crear usuario '%s': %w", username, err)
-		}
-	}
-
-	// 3. Aislar base de datos revocando CONNECT a PUBLIC y otorgar privilegios exclusivos al usuario del tenant
-	revokeStmt := fmt.Sprintf(`REVOKE CONNECT ON DATABASE "%s" FROM PUBLIC`, dbName)
-	if _, err := p.db.ExecContext(ctx, revokeStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
-		return nil, fmt.Errorf("postgres provisioner: error al revocar CONNECT a PUBLIC en '%s': %w", dbName, err)
-	}
-
-	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
-	if _, err := p.db.ExecContext(ctx, grantStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
-		return nil, fmt.Errorf("postgres provisioner: error al otorgar privilegios a '%s' sobre '%s': %w", username, dbName, err)
+	if err := p.grantUserPrivileges(ctx, dbName, username); err != nil {
+		return nil, err
 	}
 
 	creds := &ports.TenantDBCredentials{
@@ -94,6 +70,59 @@ func (p *LocalPostgresTenantProvisioner) Provision(ctx context.Context, slug str
 	creds.ConnectionString = creds.BuildConnectionString("disable")
 
 	return creds, nil
+}
+
+// ensureDatabase crea la base de datos de manera atómica si aún no existe
+func (p *LocalPostgresTenantProvisioner) ensureDatabase(ctx context.Context, dbName string) error {
+	var dbExists bool
+	checkDBQuery := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
+	if err := p.db.QueryRowContext(ctx, checkDBQuery, dbName).Scan(&dbExists); err != nil {
+		return fmt.Errorf("postgres provisioner: error al consultar existencia de bd: %w", err)
+	}
+
+	if !dbExists {
+		createDBStmt := fmt.Sprintf(`CREATE DATABASE "%s"`, dbName)
+		if _, err := p.db.ExecContext(ctx, createDBStmt); err != nil {
+			return fmt.Errorf("postgres provisioner: error al crear base de datos '%s': %w", dbName, err)
+		}
+	}
+	return nil
+}
+
+// ensureUser crea el usuario administrador de la base de datos si no existe
+func (p *LocalPostgresTenantProvisioner) ensureUser(ctx context.Context, username, password string) error {
+	var userExists bool
+	checkUserQuery := "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)"
+	if err := p.db.QueryRowContext(ctx, checkUserQuery, username).Scan(&userExists); err != nil {
+		return fmt.Errorf("postgres provisioner: error al consultar existencia de usuario: %w", err)
+	}
+
+	if !userExists {
+		escapedPass := strings.ReplaceAll(password, "'", "''")
+		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
+		if _, err := p.db.ExecContext(ctx, createUserStmt); err != nil {
+			return fmt.Errorf("postgres provisioner: error al crear usuario '%s': %w", username, err)
+		}
+	}
+	return nil
+}
+
+// revokePublicConnect revoca el privilegio CONNECT a PUBLIC para garantizar aislamiento estricto
+func (p *LocalPostgresTenantProvisioner) revokePublicConnect(ctx context.Context, dbName string) error {
+	stmt := strings.Join([]string{`REVOKE CONNECT ON DATABASE "`, dbName, `" FROM PUBLIC`}, "")
+	if _, err := p.db.ExecContext(ctx, stmt); err != nil {
+		return fmt.Errorf("postgres provisioner: error al revocar CONNECT a PUBLIC en '%s': %w", dbName, err)
+	}
+	return nil
+}
+
+// grantUserPrivileges asigna privilegios exclusivos sobre la base de datos al usuario del tenant
+func (p *LocalPostgresTenantProvisioner) grantUserPrivileges(ctx context.Context, dbName, username string) error {
+	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
+	if _, err := p.db.ExecContext(ctx, grantStmt); err != nil {
+		return fmt.Errorf("postgres provisioner: error al otorgar privilegios a '%s' sobre '%s': %w", username, dbName, err)
+	}
+	return nil
 }
 
 // ResetPassword rota la contraseña del usuario de base de datos en PostgreSQL

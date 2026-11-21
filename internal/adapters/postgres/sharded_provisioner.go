@@ -102,52 +102,29 @@ func (p *ShardedPostgresTenantProvisioner) Provision(ctx context.Context, slug s
 	}
 	defer cleanup()
 
-	// 3. Crear base de datos si no existe
-	var dbExists bool
-	checkDBQuery := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
-	if err := targetDB.QueryRowContext(ctx, checkDBQuery, dbName).Scan(&dbExists); err != nil {
-		return nil, fmt.Errorf("sharded provisioner: error al consultar existencia de bd en pool '%s': %w", pool.Name, err)
+	// 3. Aprovisionar base de datos, usuario, aislamiento y privilegios de forma atómica (SRP)
+	if err := p.ensureDatabase(ctx, targetDB, dbName, pool.Name); err != nil {
+		return nil, err
 	}
 
-	if !dbExists {
-		createDBStmt := fmt.Sprintf(`CREATE DATABASE "%s"`, dbName)
-		if _, err := targetDB.ExecContext(ctx, createDBStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
-			return nil, fmt.Errorf("sharded provisioner: error al crear bd '%s' en pool '%s': %w", dbName, pool.Name, err)
-		}
+	if err := p.ensureUser(ctx, targetDB, username, password, pool.Name); err != nil {
+		return nil, err
 	}
 
-	// 4. Crear usuario con contraseña cifrada si no existe
-	var userExists bool
-	checkUserQuery := "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)"
-	if err := targetDB.QueryRowContext(ctx, checkUserQuery, username).Scan(&userExists); err != nil {
-		return nil, fmt.Errorf("sharded provisioner: error al consultar existencia de usuario en pool '%s': %w", pool.Name, err)
+	if err := p.revokePublicConnect(ctx, targetDB, dbName, pool.Name); err != nil {
+		return nil, err
 	}
 
-	if !userExists {
-		escapedPass := strings.ReplaceAll(password, "'", "''")
-		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
-		if _, err := targetDB.ExecContext(ctx, createUserStmt); err != nil { // NOSONAR: Identifiers and passwords are sanitized
-			return nil, fmt.Errorf("sharded provisioner: error al crear usuario '%s' en pool '%s': %w", username, pool.Name, err)
-		}
+	if err := p.grantUserPrivileges(ctx, targetDB, dbName, username, pool.Name); err != nil {
+		return nil, err
 	}
 
-	// 5. Aislar base de datos revocando CONNECT a PUBLIC y otorgar privilegios exclusivos al usuario del tenant
-	revokeStmt := fmt.Sprintf(`REVOKE CONNECT ON DATABASE "%s" FROM PUBLIC`, dbName)
-	if _, err := targetDB.ExecContext(ctx, revokeStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
-		return nil, fmt.Errorf("sharded provisioner: error al revocar CONNECT a PUBLIC en '%s': %w", dbName, err)
-	}
-
-	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
-	if _, err := targetDB.ExecContext(ctx, grantStmt); err != nil { // NOSONAR: Identifiers are strictly validated against regex
-		return nil, fmt.Errorf("sharded provisioner: error al otorgar privilegios en pool '%s': %w", pool.Name, err)
-	}
-
-	// 6. Incrementar contador en el catálogo del pool (auto-marca FULL si alcanza max_tenants)
+	// 4. Incrementar contador en el catálogo del pool (auto-marca FULL si alcanza max_tenants)
 	if err := p.poolRepo.IncrementTenantCount(ctx, pool.ID); err != nil {
 		return nil, fmt.Errorf("sharded provisioner: error al actualizar contador de inquilinos en pool '%s': %w", pool.Name, err)
 	}
 
-	// 7. Evaluar umbral de advertencia para disparar el aprovisionamiento de servidor en caliente (Warm Pool)
+	// 5. Evaluar umbral de advertencia para disparar el aprovisionamiento de servidor en caliente (Warm Pool)
 	if p.scaleTrigger != nil && pool.CurrentTenants+1 >= domain.PoolScaleThresholdTenants {
 		nextPoolName := "psql-pleyades-dev-02"
 		_ = p.scaleTrigger.TriggerWarmPool(ctx, nextPoolName)
@@ -164,6 +141,59 @@ func (p *ShardedPostgresTenantProvisioner) Provision(ctx context.Context, slug s
 	creds.ConnectionString = creds.BuildConnectionString(p.sslMode)
 
 	return creds, nil
+}
+
+// ensureDatabase crea la base de datos de manera atómica si aún no existe
+func (p *ShardedPostgresTenantProvisioner) ensureDatabase(ctx context.Context, targetDB *sql.DB, dbName, poolName string) error {
+	var dbExists bool
+	checkDBQuery := "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)"
+	if err := targetDB.QueryRowContext(ctx, checkDBQuery, dbName).Scan(&dbExists); err != nil {
+		return fmt.Errorf("sharded provisioner: error al consultar existencia de bd en pool '%s': %w", poolName, err)
+	}
+
+	if !dbExists {
+		createDBStmt := fmt.Sprintf(`CREATE DATABASE "%s"`, dbName)
+		if _, err := targetDB.ExecContext(ctx, createDBStmt); err != nil {
+			return fmt.Errorf("sharded provisioner: error al crear bd '%s' en pool '%s': %w", dbName, poolName, err)
+		}
+	}
+	return nil
+}
+
+// ensureUser crea el usuario administrador de la base de datos si no existe
+func (p *ShardedPostgresTenantProvisioner) ensureUser(ctx context.Context, targetDB *sql.DB, username, password, poolName string) error {
+	var userExists bool
+	checkUserQuery := "SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname = $1)"
+	if err := targetDB.QueryRowContext(ctx, checkUserQuery, username).Scan(&userExists); err != nil {
+		return fmt.Errorf("sharded provisioner: error al consultar existencia de usuario en pool '%s': %w", poolName, err)
+	}
+
+	if !userExists {
+		escapedPass := strings.ReplaceAll(password, "'", "''")
+		createUserStmt := fmt.Sprintf(`CREATE USER "%s" WITH ENCRYPTED PASSWORD '%s'`, username, escapedPass)
+		if _, err := targetDB.ExecContext(ctx, createUserStmt); err != nil {
+			return fmt.Errorf("sharded provisioner: error al crear usuario '%s' en pool '%s': %w", username, poolName, err)
+		}
+	}
+	return nil
+}
+
+// revokePublicConnect revoca el privilegio CONNECT a PUBLIC para garantizar aislamiento estricto
+func (p *ShardedPostgresTenantProvisioner) revokePublicConnect(ctx context.Context, targetDB *sql.DB, dbName, poolName string) error {
+	stmt := strings.Join([]string{`REVOKE CONNECT ON DATABASE "`, dbName, `" FROM PUBLIC`}, "")
+	if _, err := targetDB.ExecContext(ctx, stmt); err != nil {
+		return fmt.Errorf("sharded provisioner: error al revocar CONNECT a PUBLIC en '%s' (pool '%s'): %w", dbName, poolName, err)
+	}
+	return nil
+}
+
+// grantUserPrivileges asigna privilegios exclusivos sobre la base de datos al usuario del tenant
+func (p *ShardedPostgresTenantProvisioner) grantUserPrivileges(ctx context.Context, targetDB *sql.DB, dbName, username, poolName string) error {
+	grantStmt := fmt.Sprintf(`GRANT ALL PRIVILEGES ON DATABASE "%s" TO "%s"`, dbName, username)
+	if _, err := targetDB.ExecContext(ctx, grantStmt); err != nil {
+		return fmt.Errorf("sharded provisioner: error al otorgar privilegios en pool '%s': %w", poolName, err)
+	}
+	return nil
 }
 
 // ResetPassword rota la contraseña del usuario en el pool donde reside el tenant

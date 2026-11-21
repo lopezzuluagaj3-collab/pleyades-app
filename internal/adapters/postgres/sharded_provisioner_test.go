@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,21 @@ func TestShardedProvisionerValidation(t *testing.T) {
 		_, err := prov.Provision(context.Background(), "-invalid-slug")
 		if err == nil {
 			t.Errorf("expected error for invalid slug '-invalid-slug', got nil")
+		}
+	})
+
+	t.Run("Rejects slug shorter than 3 chars", func(t *testing.T) {
+		_, err := prov.Provision(context.Background(), "ab")
+		if err == nil {
+			t.Errorf("expected error for short slug 'ab', got nil")
+		}
+	})
+
+	t.Run("Rejects slug longer than 30 chars preventing PostgreSQL truncation collision", func(t *testing.T) {
+		longSlug := "a" + strings.Repeat("b", 29) + "c"
+		_, err := prov.Provision(context.Background(), longSlug)
+		if err == nil {
+			t.Errorf("expected error for long slug '%s', got nil", longSlug)
 		}
 	})
 

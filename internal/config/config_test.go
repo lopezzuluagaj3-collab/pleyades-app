@@ -50,11 +50,11 @@ func testConfigSuccess(t *testing.T) {
 	if cfg.JWTSecret == "" {
 		t.Errorf("expected non-empty default JWTSecret")
 	}
-	if cfg.DB.MaxOpenConns != 5 {
-		t.Errorf("expected default DB.MaxOpenConns 5, got %d", cfg.DB.MaxOpenConns)
+	if cfg.DB.MaxOpenConns != 4 {
+		t.Errorf("expected default DB.MaxOpenConns 4, got %d", cfg.DB.MaxOpenConns)
 	}
-	if cfg.DB.MaxIdleConns != 5 {
-		t.Errorf("expected default DB.MaxIdleConns 5, got %d", cfg.DB.MaxIdleConns)
+	if cfg.DB.MaxIdleConns != 4 {
+		t.Errorf("expected default DB.MaxIdleConns 4, got %d", cfg.DB.MaxIdleConns)
 	}
 
 	// Test custom pool parameters

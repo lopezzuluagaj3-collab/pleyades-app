@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"pleyades-app/internal/adapters/postgres"
+	"strconv"
 	"strings"
 )
 
@@ -89,16 +90,30 @@ func Load() (Config, error) {
 
 	jwtSecret := getEnv("JWT_SECRET", "super-secret-pleyades-enterprise-key-for-local-dev-123456789")
 
+	maxOpenStr := getEnv("DB_MAX_OPEN_CONNS", "5")
+	maxOpen, err := strconv.Atoi(maxOpenStr)
+	if err != nil || maxOpen <= 0 {
+		maxOpen = 5
+	}
+
+	maxIdleStr := getEnv("DB_MAX_IDLE_CONNS", "5")
+	maxIdle, err := strconv.Atoi(maxIdleStr)
+	if err != nil || maxIdle <= 0 {
+		maxIdle = maxOpen
+	}
+
 	return Config{
 		ServerPort: SERVER_PORT,
 		JWTSecret:  jwtSecret,
 		DB: postgres.DBConfig{
-			Host:     host,
-			Port:     DB_PORT,
-			User:     user,
-			Password: pass,
-			DBName:   name,
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
+			Host:         host,
+			Port:         DB_PORT,
+			User:         user,
+			Password:     pass,
+			DBName:       name,
+			SSLMode:      getEnv("DB_SSLMODE", "disable"),
+			MaxOpenConns: maxOpen,
+			MaxIdleConns: maxIdle,
 		},
 	}, nil
 }

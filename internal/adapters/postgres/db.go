@@ -9,12 +9,14 @@ import (
 )
 
 type DBConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	Host         string
+	Port         string
+	User         string
+	Password     string
+	DBName       string
+	SSLMode      string
+	MaxOpenConns int
+	MaxIdleConns int
 }
 
 // NewConnection abre el pool de conexiones a PostgreSQL y aplica buenas prácticas cloud-native
@@ -33,9 +35,21 @@ func NewConnection(cfg DBConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("postgres: error al abrir la conexión: %w", err)
 	}
 
-	// Configuración del Pool de conexiones optimizado para Kubernetes
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
+	// Dimensionamiento defensivo del Pool frente al HPA en Kubernetes:
+	// En Azure Database for PostgreSQL Flexible Server (SKU Standard_B1ms), max_connections = 50 (~47 disponibles).
+	// Fijar 5 conexiones por pod garantiza que hasta 7 pods en rolling update consuman un máximo de 35 conexiones,
+	// dejando un margen de seguridad > 12 conexiones para mantenimiento, administradores y procesos del sistema.
+	maxOpen := cfg.MaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 5
+	}
+	maxIdle := cfg.MaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = maxOpen
+	}
+
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxIdle)
 	db.SetConnMaxLifetime(5 * time.Minute)
 	db.SetConnMaxIdleTime(5 * time.Minute)
 

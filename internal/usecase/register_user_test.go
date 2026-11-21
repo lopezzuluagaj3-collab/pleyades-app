@@ -48,8 +48,9 @@ func (m *mockUserRepository) Delete(ctx context.Context, email string) error {
 
 // Mock del hasher de contraseñas
 type mockPasswordHasher struct {
-	hashErr    error
-	compareErr error
+	hashErr            error
+	compareErr         error
+	compareDummyCalled bool
 }
 
 func (m *mockPasswordHasher) Hash(password string) (string, error) {
@@ -66,6 +67,11 @@ func (m *mockPasswordHasher) Compare(hashedPassword, password string) error {
 	if hashedPassword != "hashed_"+password {
 		return errors.New("hash mismatch")
 	}
+	return nil
+}
+
+func (m *mockPasswordHasher) CompareDummy(password string) error {
+	m.compareDummyCalled = true
 	return nil
 }
 

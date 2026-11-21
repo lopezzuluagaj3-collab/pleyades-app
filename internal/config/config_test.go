@@ -50,4 +50,29 @@ func testConfigSuccess(t *testing.T) {
 	if cfg.JWTSecret == "" {
 		t.Errorf("expected non-empty default JWTSecret")
 	}
+	if cfg.DB.MaxOpenConns != 5 {
+		t.Errorf("expected default DB.MaxOpenConns 5, got %d", cfg.DB.MaxOpenConns)
+	}
+	if cfg.DB.MaxIdleConns != 5 {
+		t.Errorf("expected default DB.MaxIdleConns 5, got %d", cfg.DB.MaxIdleConns)
+	}
+
+	// Test custom pool parameters
+	_ = os.Setenv("DB_MAX_OPEN_CONNS", "10")
+	_ = os.Setenv("DB_MAX_IDLE_CONNS", "8")
+	defer func() {
+		_ = os.Unsetenv("DB_MAX_OPEN_CONNS")
+		_ = os.Unsetenv("DB_MAX_IDLE_CONNS")
+	}()
+
+	cfgCustom, err := config.Load()
+	if err != nil {
+		t.Fatalf("unexpected error loading custom config: %v", err)
+	}
+	if cfgCustom.DB.MaxOpenConns != 10 {
+		t.Errorf("expected custom DB.MaxOpenConns 10, got %d", cfgCustom.DB.MaxOpenConns)
+	}
+	if cfgCustom.DB.MaxIdleConns != 8 {
+		t.Errorf("expected custom DB.MaxIdleConns 8, got %d", cfgCustom.DB.MaxIdleConns)
+	}
 }
